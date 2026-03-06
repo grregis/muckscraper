@@ -1,0 +1,4 @@
+flask==2.3.2
+psycopg2-binary==2.9.6
+flask_sqlalchemy==2.5.1
+sqlalchemy==1.4.35

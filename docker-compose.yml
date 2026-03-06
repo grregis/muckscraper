@@ -1,0 +1,27 @@
+services:
+  postgres:
+    image: postgres:14
+    environment:
+      POSTGRES_USER: postgres   # Use the same user as in your app
+      POSTGRES_PASSWORD: default1   # Match the password used in your app
+      POSTGRES_DB: aggregator   # Ensure this matches the app's database name
+    volumes:
+       - ./postgres_data:/var/lib/postgresql/data
+  app:
+    build: .
+    ports:
+       - 5000:5000
+    depends_on:
+       - postgres
+    command: sh -c "sleep 10 && python main.py"
+    environment:
+      DATABASE_URL: "postgresql://postgres:default1@postgres:5432/aggregator"
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: default1
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: aggregator
+    volumes:
+       - .:/app    # Bind mount the current directory to /app inside the container
+networks:
+  default:
+    name: app-network

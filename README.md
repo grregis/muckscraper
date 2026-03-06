@@ -1,4 +1,4 @@
-## MuckScraper: All the muck that's fit to scrape
+## MuckScraper: All the Muck That's Fit to Scrape
  
 A news scraping service that will grab articles and put into a DB and also be able to export data so LLM can analyze, sumarize, categorize, and any other -ize I might have forgotten it can do.
 

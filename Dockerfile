@@ -19,10 +19,11 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the app code
-COPY app/ .
+COPY aggregator ./aggregator
+COPY news_fetcher ./news_fetcher
 
 # Expose the port the app runs on
 EXPOSE 5000
 
 # Run the app
-CMD ["python", "main.py"]
+CMD ["python", "-m", "aggregator.app"]

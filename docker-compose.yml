@@ -1,0 +1,64 @@
+services:
+  postgres:
+    image: postgres:14
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+
+  news_fetcher:
+    build:
+      context: .
+      dockerfile: news_fetcher/Dockerfile
+    depends_on:
+      - postgres
+    command: sh -c "sleep 10 && python -m news_fetcher.fetch_and_store_articles"
+    environment:
+      DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: ${POSTGRES_DB}
+      NEWS_API_KEY: ${NEWS_API_KEY}
+      OLLAMA_HOST: ${OLLAMA_HOST}
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: news_fetcher/Dockerfile
+    depends_on:
+      - postgres
+    command: sh -c "sleep 15 && python -m news_fetcher.scheduler"
+    environment:
+      DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: ${POSTGRES_DB}
+      NEWS_API_KEY: ${NEWS_API_KEY}
+      OLLAMA_HOST: ${OLLAMA_HOST}
+    restart: unless-stopped
+
+  app:
+    build: .
+    ports:
+      - "5000:5000"
+    depends_on:
+      - postgres
+    command: sh -c "sleep 5 && python -m aggregator.app"
+    environment:
+      DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+      POSTGRES_USER: p${POSTGRES_USER}s
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: ${POSTGRES_DB}
+      NEWS_API_KEY: ${NEWS_API_KEY}
+      OLLAMA_HOST: ${OLLAMA_HOST}
+    volumes:
+      - .:/app
+
+networks:
+  default:
+    name: app-network

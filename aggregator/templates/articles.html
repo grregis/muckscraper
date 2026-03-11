@@ -3,41 +3,430 @@
 <head>
     <title>News Aggregator</title>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; }
-        .search-bar { margin-bottom: 30px; }
-        .search-bar input { padding: 8px; width: 300px; font-size: 16px; }
-        .search-bar button { padding: 8px 16px; font-size: 16px; cursor: pointer; }
-        .hint { font-size: 13px; color: #888; margin-top: 6px; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f4f4;
+            color: #222;
+        }
+
+        .layout {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 220px;
+            min-width: 220px;
+            background: #1e1e2e;
+            color: #cdd6f4;
+            padding: 24px 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar h2 {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #888;
+            padding: 0 20px 12px 20px;
+            border-bottom: 1px solid #333;
+            margin-bottom: 12px;
+        }
+
+        .topic-block {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 4px 12px 4px 0;
+            border-left: 3px solid transparent;
+        }
+
+        .topic-block.active {
+            border-left: 3px solid #89b4fa;
+            background: #2a2a3e;
+        }
+
+        .topic-block a {
+            flex: 1;
+            padding: 8px 8px 8px 17px;
+            color: #cdd6f4;
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        .topic-block.active a { color: #89b4fa; font-weight: bold; }
+        .topic-block a:hover { color: #fff; }
+
+        .fetch-btn {
+            background: none;
+            border: 1px solid #444;
+            color: #888;
+            font-size: 11px;
+            padding: 3px 6px;
+            border-radius: 3px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .fetch-btn:hover { color: #89b4fa; border-color: #89b4fa; }
+
+        .sidebar-divider {
+            border: none;
+            border-top: 1px solid #2a2a3a;
+            margin: 4px 20px;
+        }
+
+        .ollama-status {
+            margin-top: auto;
+            padding: 16px 20px;
+            border-top: 1px solid #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: #888;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #555;
+            flex-shrink: 0;
+        }
+
+        .status-dot.online  { background: #a6e3a1; }
+        .status-dot.offline { background: #f38ba8; }
+
+        /* Main */
+        .main {
+            flex: 1;
+            padding: 30px 40px;
+            max-width: 900px;
+        }
+
+        h1 { font-size: 24px; margin-bottom: 8px; color: #1e1e2e; }
+
+        .active-topic-label {
+            font-size: 13px;
+            color: #89b4fa;
+            margin-bottom: 20px;
+            font-style: italic;
+        }
+
+        .search-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+
+        .search-bar input {
+            padding: 8px 12px;
+            width: 300px;
+            font-size: 15px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        .search-bar button {
+            padding: 8px 16px;
+            font-size: 15px;
+            background: #1e1e2e;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .search-bar button:hover { background: #333; }
+        .hint { font-size: 12px; color: #999; margin-bottom: 24px; }
+
+        /* Story cards */
+        .story {
+            background: white;
+            border-radius: 6px;
+            padding: 16px 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+
+        .story-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            gap: 12px;
+        }
+
+        .story h2 { font-size: 17px; color: #1e1e2e; }
+
+        .summary {
+            background: #f8f9ff;
+            border-left: 3px solid #89b4fa;
+            padding: 10px 14px;
+            margin-bottom: 12px;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #333;
+            border-radius: 0 4px 4px 0;
+        }
+
+        .summary-label {
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+            color: #89b4fa;
+            letter-spacing: 0.5px;
+            margin-bottom: 5px;
+        }
+
+        .no-summary {
+            font-size: 13px;
+            color: #aaa;
+            font-style: italic;
+            margin-bottom: 10px;
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-block;
+            border: none;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .btn-dark    { background: #1e1e2e; color: #cdd6f4; }
+        .btn-dark:hover { background: #333; }
+        .btn-muted   { background: #eee; color: #555; }
+        .btn-muted:hover { background: #ddd; }
+        .btn-orange  { background: #fab387; color: #1e1e2e; }
+        .btn-orange:hover { background: #f9a070; }
+
+        .action-row {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        /* Articles list */
+        .story ul { list-style: none; padding: 0; }
+
+        .story ul li {
+            padding: 6px 0;
+            font-size: 14px;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+
+        .story ul li:last-child { border-bottom: none; }
+
+        .article-title { color: #333; text-decoration: none; }
+        .article-title:hover { color: #89b4fa; text-decoration: underline; }
+
+        .outlet-name { color: #888; font-size: 12px; }
+
+        .bias-tag {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+
+        .bias-1    { background-color: #1a6bb5; color: white; }
+        .bias-2    { background-color: #6aaee0; color: white; }
+        .bias-3    { background-color: #888;    color: white; }
+        .bias-4    { background-color: #e07b6a; color: white; }
+        .bias-5    { background-color: #b51a1a; color: white; }
+        .bias-none { background-color: #ddd;    color: #666;  }
+
+        .article-actions { margin-left: auto; display: flex; gap: 4px; }
+
+        .empty { color: #999; font-style: italic; margin-top: 40px; }
     </style>
 </head>
 <body>
 
-    <h1>News Aggregator</h1>
+<div class="layout">
 
-    <div class="search-bar">
-        <form method="POST" action="/fetch">
-            <input type="text" name="query" placeholder="e.g. climate, AI, Ukraine ...">
-            <button type="submit">Fetch Articles</button>
-        </form>
-        <p class="hint">Leave blank and click Fetch to load US Top Headlines</p>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <h2>Topics</h2>
+
+        {% for topic in topics %}
+        <div class="topic-block {% if active_label == topic.label %}active{% endif %}">
+            <a href="/articles?topic={{ topic.label | urlencode }}">{{ topic.label }}</a>
+            <form method="POST" action="/fetch" style="display:inline;">
+                <input type="hidden" name="mode"     value="{{ topic.mode }}">
+                <input type="hidden" name="query"    value="{{ topic.query or '' }}">
+                <input type="hidden" name="country"  value="{{ topic.country or '' }}">
+                <input type="hidden" name="category" value="{{ topic.category or '' }}">
+                <input type="hidden" name="label"    value="{{ topic.label }}">
+                <button type="submit" class="fetch-btn">↻</button>
+            </form>
+        </div>
+        <hr class="sidebar-divider">
+        {% endfor %}
+
+        <div class="ollama-status">
+            <div class="status-dot" id="ollama-dot"></div>
+            <span id="ollama-label">Checking Ollama...</span>
+        </div>
     </div>
 
-    {% if stories %}
-        {% for story in stories %}
-            <h2>{{ story.title }}</h2>
-            <ul>
-                {% for article in story.articles %}
-                <li>
-                    <a href="{{ article.url }}" target="_blank">{{ article.title }}</a>
-                    ({{ article.outlet.name }})
-                </li>
-                {% endfor %}
-            </ul>
-            <hr>
-        {% endfor %}
-    {% else %}
-        <p>No articles yet. Click <strong>Fetch Articles</strong> above to load stories.</p>
-    {% endif %}
+    <!-- Main -->
+    <div class="main">
+        <h1>News Aggregator</h1>
+
+        {% if active_label %}
+            <p class="active-topic-label">Showing: {{ active_label }}</p>
+        {% endif %}
+
+        <form method="POST" action="/fetch" class="search-bar">
+            <input type="hidden" name="mode" value="query">
+            <input type="text" name="query" placeholder="Search a topic e.g. climate, AI ...">
+            <button type="submit">Fetch Articles</button>
+        </form>
+        <p class="hint">Type a topic and click Fetch, or use the sidebar links</p>
+
+        {% if stories %}
+            {% for story in stories %}
+            <div class="story">
+
+                <div class="story-header">
+                    <h2>{{ story.title }}</h2>
+                </div>
+
+                <!-- Summary -->
+                {% if story.summary and story.summary != story.title %}
+                    <div class="summary">
+                        <div class="summary-label">AI Summary</div>
+                        {{ story.summary }}
+                    </div>
+                    <div class="action-row">
+                        <form method="POST" action="/summarize/{{ story.id }}">
+                            <input type="hidden" name="label" value="{{ active_label or '' }}">
+                            <button type="submit" class="btn btn-dark">↻ Re-summarize</button>
+                        </form>
+                    </div>
+                {% else %}
+                    <p class="no-summary">No summary yet.</p>
+                    <div class="action-row">
+                        <form method="POST" action="/summarize/{{ story.id }}">
+                            <input type="hidden" name="label" value="{{ active_label or '' }}">
+                            <button type="submit" class="btn btn-dark">✦ Generate Summary</button>
+                        </form>
+                    </div>
+                {% endif %}
+
+                <!-- Articles -->
+                <ul>
+                    {% for article in story.articles %}
+                    <li>
+                        <a class="article-title" href="{{ article.url }}" target="_blank">
+                            {{ article.title }}
+                        </a>
+                        <span class="outlet-name">— {{ article.outlet.name }}</span>
+
+                        <!-- Outlet bias tag -->
+                        {% if article.outlet.bias_score == 1 %}
+                            <span class="bias-tag bias-1">Outlet: Left</span>
+                        {% elif article.outlet.bias_score == 2 %}
+                            <span class="bias-tag bias-2">Outlet: Lean Left</span>
+                        {% elif article.outlet.bias_score == 3 %}
+                            <span class="bias-tag bias-3">Outlet: Center</span>
+                        {% elif article.outlet.bias_score == 4 %}
+                            <span class="bias-tag bias-4">Outlet: Lean Right</span>
+                        {% elif article.outlet.bias_score == 5 %}
+                            <span class="bias-tag bias-5">Outlet: Right</span>
+                        {% else %}
+                            <span class="bias-tag bias-none">Outlet: Unrated</span>
+                        {% endif %}
+
+                        <!-- Article-level bias tag (if individually rated) -->
+                        {% if article.bias_score and article.bias_score != article.outlet.bias_score %}
+                            {% if article.bias_score == 1 %}
+                                <span class="bias-tag bias-1">Article: Left</span>
+                            {% elif article.bias_score == 2 %}
+                                <span class="bias-tag bias-2">Article: Lean Left</span>
+                            {% elif article.bias_score == 3 %}
+                                <span class="bias-tag bias-3">Article: Center</span>
+                            {% elif article.bias_score == 4 %}
+                                <span class="bias-tag bias-4">Article: Lean Right</span>
+                            {% elif article.bias_score == 5 %}
+                                <span class="bias-tag bias-5">Article: Right</span>
+                            {% endif %}
+                        {% endif %}
+
+                        <!-- Action buttons -->
+                        <span class="article-actions">
+                            <!-- Re-rank outlet -->
+                            <form method="POST" action="/rerank-outlet/{{ article.outlet.id }}">
+                                <input type="hidden" name="label" value="{{ active_label or '' }}">
+                                <button type="submit" class="btn btn-muted"
+                                    title="Re-rank {{ article.outlet.name }} bias via Ollama">
+                                    ↻ Outlet
+                                </button>
+                            </form>
+                            <!-- Rate this article -->
+                            <form method="POST" action="/rate-article/{{ article.id }}">
+                                <input type="hidden" name="label" value="{{ active_label or '' }}">
+                                <button type="submit" class="btn btn-orange"
+                                    title="Rate this article's bias via Ollama">
+                                    ✦ Article
+                                </button>
+                            </form>
+                        </span>
+
+                    </li>
+                    {% endfor %}
+                </ul>
+
+            </div>
+            {% endfor %}
+        {% else %}
+            <p class="empty">No articles found. Try clicking ↻ next to a topic to fetch fresh articles.</p>
+        {% endif %}
+
+    </div>
+</div>
+
+<script>
+    function checkOllamaStatus() {
+        fetch('/ollama-status')
+            .then(r => r.json())
+            .then(data => {
+                const dot   = document.getElementById('ollama-dot');
+                const label = document.getElementById('ollama-label');
+                if (data.online) {
+                    dot.className     = 'status-dot online';
+                    label.textContent = 'Ollama Online';
+                } else {
+                    dot.className     = 'status-dot offline';
+                    label.textContent = 'Ollama Offline';
+                }
+            })
+            .catch(() => {
+                document.getElementById('ollama-dot').className = 'status-dot offline';
+                document.getElementById('ollama-label').textContent = 'Ollama Offline';
+            });
+    }
+
+    checkOllamaStatus();
+    setInterval(checkOllamaStatus, 30000);
+</script>
 
 </body>
 </html>

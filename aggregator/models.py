@@ -63,3 +63,10 @@ class Article(db.Model):
     bias_score = db.Column(db.Float)
 
     topics = db.relationship("Topic", secondary=article_topics, back_populates="articles")
+
+
+class AppSetting(db.Model):
+    __tablename__ = "app_settings"
+
+    key   = db.Column(db.String, primary_key=True)
+    value = db.Column(db.String)

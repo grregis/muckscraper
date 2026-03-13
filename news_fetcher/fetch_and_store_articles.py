@@ -5,9 +5,12 @@ from aggregator.models import Article, Outlet, Story, Topic
 from newsapi import NewsApiClient
 from news_fetcher.outlet_bias_llm import get_outlet_bias_from_llm
 from news_fetcher.summarizer import summarize_story, check_ollama_status
+from news_fetcher.scraper import scrape_article
 from datetime import datetime
 import requests
 import os
+from news_fetcher.story_grouper import find_or_create_story
+from datetime import datetime, timedelta
 
 app = create_app()
 
@@ -74,12 +77,17 @@ def retry_unrated_outlets():
 
 
 def get_or_create_topic(topic_name):
-    """Get existing topic or create a new one."""
+    """Get existing topic or create a new one, handling race conditions."""
     topic = Topic.query.filter_by(name=topic_name).first()
     if not topic:
-        topic = Topic(name=topic_name)
-        db.session.add(topic)
-        db.session.flush()
+        try:
+            topic = Topic(name=topic_name)
+            db.session.add(topic)
+            db.session.flush()
+        except Exception:
+            # Another process created it at the same time, roll back and fetch it
+            db.session.rollback()
+            topic = Topic.query.filter_by(name=topic_name).first()
     return topic
 
 
@@ -92,6 +100,11 @@ def store_articles(articles_data, topic_name):
     """
     topic = get_or_create_topic(topic_name)
     stored = 0
+
+    # Pre-fetch recent stories once for the whole batch
+    cutoff = datetime.utcnow() - timedelta(days=7)
+    recent_stories = Story.query.filter(Story.created_at >= cutoff).all()
+    print(f"  [Grouper] Loaded {len(recent_stories)} recent stories for matching")
 
     for article in articles_data:
         title        = article.get("title")
@@ -133,19 +146,22 @@ def store_articles(articles_data, topic_name):
             db.session.add(outlet)
             db.session.flush()
 
-        story_title = guess_story_title(title)
-        story = Story.query.filter_by(title=story_title).first()
-        if not story:
-            story = Story(title=story_title, summary=None)
-            db.session.add(story)
-            db.session.flush()
+        story = find_or_create_story(title, db, Story, recent_stories)
+
+        # Add new story to recent_stories so subsequent articles
+        # in this same batch can match against it
+        if story not in recent_stories:
+            recent_stories.append(story)
 
         if topic not in story.topics:
             story.topics.append(topic)
 
+        scraped_content = scrape_article(url)
+        final_content = scraped_content if scraped_content else content
+
         new_article = Article(
             title=title,
-            content=content,
+            content=final_content,
             source=source_name,
             outlet_id=outlet.id,
             story_id=story.id,

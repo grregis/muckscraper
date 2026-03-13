@@ -7,3 +7,5 @@ beautifulsoup4
 requests
 apscheduler
 python-dotenv
+playwright
+bleach

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Muckscraper: All the muck that's fit to scrape</title>
+    <title>MuckScraper: All the muck that's fit to scrape</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -16,7 +16,6 @@
             min-height: 100vh;
         }
 
-        /* Sidebar */
         .sidebar {
             width: 220px;
             min-width: 220px;
@@ -102,7 +101,6 @@
         .status-dot.online  { background: #a6e3a1; }
         .status-dot.offline { background: #f38ba8; }
 
-        /* Main */
         .main {
             flex: 1;
             padding: 30px 40px;
@@ -146,7 +144,6 @@
         .search-bar button:hover { background: #333; }
         .hint { font-size: 12px; color: #999; margin-bottom: 24px; }
 
-        /* Story cards */
         .story {
             background: white;
             border-radius: 6px;
@@ -192,7 +189,14 @@
             margin-bottom: 10px;
         }
 
-        /* Buttons */
+        .summary p {
+            margin-bottom: 0.7em;
+        }
+
+        .summary p:last-child {
+            margin-bottom: 0;
+        }
+
         .btn {
             display: inline-block;
             border: none;
@@ -217,7 +221,6 @@
             margin-bottom: 12px;
         }
 
-        /* Articles list */
         .story ul { list-style: none; padding: 0; }
 
         .story ul li {
@@ -234,6 +237,15 @@
 
         .article-title { color: #333; text-decoration: none; }
         .article-title:hover { color: #89b4fa; text-decoration: underline; }
+
+        .full-text-link {
+            font-size: 11px;
+            color: #89b4fa;
+            text-decoration: none;
+            margin-left: 4px;
+        }
+
+        .full-text-link:hover { text-decoration: underline; }
 
         .outlet-name { color: #888; font-size: 12px; }
 
@@ -261,7 +273,6 @@
 
 <div class="layout">
 
-    <!-- Sidebar -->
     <div class="sidebar">
         <h2>Topics</h2>
 
@@ -276,8 +287,8 @@
                 <input type="hidden" name="label"          value="{{ topic.label }}">
                 <input type="hidden" name="gnews_query"    value="{{ topic.gnews_query or '' }}">
                 <input type="hidden" name="gnews_category" value="{{ topic.gnews_category or '' }}">
-    <button type="submit" class="fetch-btn">↻</button>
-</form>
+                <button type="submit" class="fetch-btn">↻</button>
+            </form>
         </div>
         <hr class="sidebar-divider">
         {% endfor %}
@@ -288,9 +299,8 @@
         </div>
     </div>
 
-    <!-- Main -->
     <div class="main">
-        <h1>Muckscraper: All the muck that's fit to scrape</h1>
+        <h1>MuckScraper: All the muck that's fit to scrape</h1>
 
         {% if active_label %}
             <p class="active-topic-label">Showing: {{ active_label }}</p>
@@ -311,11 +321,14 @@
                     <h2>{{ story.title }}</h2>
                 </div>
 
-                <!-- Summary -->
                 {% if story.summary and story.summary != story.title %}
                     <div class="summary">
                         <div class="summary-label">AI Summary</div>
-                        {{ story.summary }}
+                        {% for paragraph in story.summary.split('\n') %}
+                            {% if paragraph.strip() %}
+                                <p>{{ paragraph.strip() }}</p>
+                            {% endif %}
+                        {% endfor %}
                     </div>
                     <div class="action-row">
                         <form method="POST" action="/summarize/{{ story.id }}">
@@ -333,16 +346,19 @@
                     </div>
                 {% endif %}
 
-                <!-- Articles -->
                 <ul>
                     {% for article in story.articles %}
                     <li>
                         <a class="article-title" href="{{ article.url }}" target="_blank">
                             {{ article.title }}
                         </a>
+
+                        {% if article.content and article.content | length > 500 %}
+                        <a class="full-text-link" href="/article/{{ article.id }}">[full text]</a>
+                        {% endif %}
+
                         <span class="outlet-name">— {{ article.outlet.name }}</span>
 
-                        <!-- Outlet bias tag -->
                         {% if article.outlet.bias_score == 1 %}
                             <span class="bias-tag bias-1">Outlet: Left</span>
                         {% elif article.outlet.bias_score == 2 %}
@@ -357,7 +373,6 @@
                             <span class="bias-tag bias-none">Outlet: Unrated</span>
                         {% endif %}
 
-                        <!-- Article-level bias tag (if individually rated) -->
                         {% if article.bias_score and article.bias_score != article.outlet.bias_score %}
                             {% if article.bias_score == 1 %}
                                 <span class="bias-tag bias-1">Article: Left</span>
@@ -372,9 +387,7 @@
                             {% endif %}
                         {% endif %}
 
-                        <!-- Action buttons -->
                         <span class="article-actions">
-                            <!-- Re-rank outlet -->
                             <form method="POST" action="/rerank-outlet/{{ article.outlet.id }}">
                                 <input type="hidden" name="label" value="{{ active_label or '' }}">
                                 <button type="submit" class="btn btn-muted"
@@ -382,7 +395,6 @@
                                     ↻ Outlet
                                 </button>
                             </form>
-                            <!-- Rate this article -->
                             <form method="POST" action="/rate-article/{{ article.id }}">
                                 <input type="hidden" name="label" value="{{ active_label or '' }}">
                                 <button type="submit" class="btn btn-orange"

@@ -39,14 +39,21 @@ def summarize_story(story):
 
     prompt = f"""You are a professional news analyst. Below are multiple news articles covering the same story.
 
-Your task is to write a comprehensive, detailed summary of this story. Include:
-- What happened and the key facts
-- Who is involved and their roles
-- Why this is significant
-- Any different perspectives or angles covered across the sources
-- Any important context or background
+Your task is to write a comprehensive, detailed summary of this story using clearly separated paragraphs.
 
-Be as detailed and thorough as possible. Write in clear, neutral journalistic prose.
+Structure your summary as follows:
+- Paragraph 1: What happened and the key facts
+- Paragraph 2: Who is involved and their roles
+- Paragraph 3: Why this is significant
+- Paragraph 4: Different perspectives or angles covered across the sources
+- Paragraph 5: Important context or background (if relevant)
+
+Rules:
+- Separate each paragraph with a blank line
+- Write in clear, neutral journalistic prose
+- Do not use bullet points, headers, or markdown formatting
+- Do not include labels like "Paragraph 1:" in your response
+- Just write the paragraphs directly, separated by blank lines
 
 Articles:
 {combined}

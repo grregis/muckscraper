@@ -155,6 +155,11 @@ def create_app():
             online = False
         return jsonify({"online": online})
 
+    @app.route("/article/<int:article_id>")
+    def view_article(article_id):
+        article = Article.query.get_or_404(article_id)
+        return render_template("article.html", article=article)
+
     return app
 
 

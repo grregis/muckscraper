@@ -3,7 +3,9 @@
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from aggregator import create_app, db
+from aggregator.models import AppSetting
 from news_fetcher.fetch_and_store_articles import fetch_and_store_articles
+from datetime import datetime, timedelta
 import logging
 import sys
 
@@ -13,7 +15,8 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s"
 )
 
-# Each entry fetches from both NewsAPI and GNews
+FETCH_INTERVAL_HOURS = 3
+
 SCHEDULED_FETCHES = [
     {
         "label":          "US Headlines",
@@ -65,6 +68,53 @@ SCHEDULED_FETCHES = [
 app = create_app()
 
 
+def get_last_fetch_time():
+    """Get the last fetch timestamp from the database."""
+    setting = AppSetting.query.filter_by(key="last_fetch").first()
+    if setting and setting.value:
+        try:
+            return datetime.fromisoformat(setting.value)
+        except Exception:
+            return None
+    return None
+
+
+def set_last_fetch_time():
+    """Store the current time as the last fetch timestamp."""
+    setting = AppSetting.query.filter_by(key="last_fetch").first()
+    if setting:
+        setting.value = datetime.utcnow().isoformat()
+    else:
+        setting = AppSetting(key="last_fetch", value=datetime.utcnow().isoformat())
+        db.session.add(setting)
+    db.session.commit()
+
+
+def should_fetch_now():
+    """
+    Returns True if it's been more than FETCH_INTERVAL_HOURS since the last fetch,
+    or if no fetch has ever been recorded.
+    """
+    last_fetch = get_last_fetch_time()
+    if last_fetch is None:
+        logging.info("No previous fetch found, fetching now.")
+        return True
+
+    elapsed = datetime.utcnow() - last_fetch
+    remaining = timedelta(hours=FETCH_INTERVAL_HOURS) - elapsed
+
+    if elapsed >= timedelta(hours=FETCH_INTERVAL_HOURS):
+        logging.info(f"Last fetch was {elapsed} ago, fetching now.")
+        return True
+    else:
+        minutes_remaining = int(remaining.total_seconds() / 60)
+        logging.info(
+            f"Last fetch was {int(elapsed.total_seconds() / 60)} minutes ago. "
+            f"Next fetch in {minutes_remaining} minutes, skipping startup fetch."
+        )
+        return False
+
+
 def run_all_fetches():
     logging.info("=== Starting scheduled fetch run ===")
     with app.app_context():
@@ -83,6 +133,8 @@ def run_all_fetches():
             except Exception as e:
                 logging.error(f"Error fetching {fetch['label']}: {e}")
 
+        set_last_fetch_time()
+
     logging.info("=== Scheduled fetch run complete ===")
 
 
@@ -91,19 +143,20 @@ if __name__ == "__main__":
 
     with app.app_context():
         db.create_all()
+        # Only fetch on startup if enough time has passed
+        if should_fetch_now():
+            run_all_fetches()
+        else:
+            logging.info("Skipping startup fetch.")
 
-    # Run once immediately on startup
-    run_all_fetches()
-
-    # Schedule every 3 hours
     scheduler = BlockingScheduler()
     scheduler.add_job(
         run_all_fetches,
-        trigger=IntervalTrigger(hours=3),
+        trigger=IntervalTrigger(hours=FETCH_INTERVAL_HOURS),
         id="fetch_job",
         name="3-hourly news fetch",
         replace_existing=True
     )
 
-    logging.info("Scheduler running. Next fetch in 3 hours.")
+    logging.info(f"Scheduler running. Fetching every {FETCH_INTERVAL_HOURS} hours.")
     scheduler.start()

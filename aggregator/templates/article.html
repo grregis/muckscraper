@@ -1,0 +1,211 @@
+#/aggregator/templates/article.html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ article.title }} — MuckScraper</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f4f4;
+            color: #222;
+        }
+
+        .topbar {
+            background: #1e1e2e;
+            padding: 14px 40px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .topbar a {
+            color: #89b4fa;
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        .topbar a:hover { text-decoration: underline; }
+
+        .topbar-title {
+            color: #cdd6f4;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+
+        .article-card {
+            background: white;
+            border-radius: 6px;
+            padding: 30px 36px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+
+        .article-meta {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+
+        .outlet-name {
+            font-size: 13px;
+            color: #888;
+        }
+
+        .article-date {
+            font-size: 13px;
+            color: #aaa;
+        }
+
+        .bias-tag {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+
+        .bias-1 { background-color: #1a6bb5; color: white; }
+        .bias-2 { background-color: #6aaee0; color: white; }
+        .bias-3 { background-color: #888;    color: white; }
+        .bias-4 { background-color: #e07b6a; color: white; }
+        .bias-5 { background-color: #b51a1a; color: white; }
+        .bias-none { background-color: #ddd; color: #666;  }
+
+        h1 {
+            font-size: 22px;
+            color: #1e1e2e;
+            margin-bottom: 16px;
+            line-height: 1.4;
+        }
+
+        .divider {
+            border: none;
+            border-top: 1px solid #eee;
+            margin: 20px 0;
+        }
+
+        .article-body {
+            font-size: 15px;
+            line-height: 1.8;
+            color: #333;
+        }
+
+        .article-body p {
+            margin-bottom: 1em;
+        }
+
+        .article-body h1, .article-body h2, .article-body h3 {
+            margin: 1.2em 0 0.4em;
+            color: #1e1e2e;
+        }
+
+        .article-body ul, .article-body ol {
+            margin: 0.5em 0 1em 1.5em;
+        }
+
+        .article-body li {
+            margin-bottom: 0.3em;
+        }
+
+        .article-body blockquote {
+            border-left: 3px solid #89b4fa;
+            margin: 1em 0;
+            padding: 8px 16px;
+            color: #555;
+            font-style: italic;
+        }
+
+        .article-body a {
+            color: #89b4fa;
+        }
+
+        .article-body img {
+            max-width: 100%;
+            height: auto;
+            margin: 1em 0;
+            border-radius: 4px;
+        }
+
+        .source-link {
+            margin-top: 24px;
+            padding-top: 16px;
+            border-top: 1px solid #eee;
+            font-size: 13px;
+            color: #888;
+        }
+
+        .source-link a {
+            color: #89b4fa;
+            text-decoration: none;
+        }
+
+        .source-link a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+
+<div class="topbar">
+    <span class="topbar-title">MuckScraper</span>
+    <a href="/articles">← Back to Articles</a>
+</div>
+
+<div class="container">
+    <div class="article-card">
+
+        <div class="article-meta">
+            <span class="outlet-name">{{ article.outlet.name }}</span>
+            <span class="article-date">{{ article.date.strftime('%B %d, %Y') }}</span>
+
+            {% if article.outlet.bias_score == 1 %}
+                <span class="bias-tag bias-1">Left</span>
+            {% elif article.outlet.bias_score == 2 %}
+                <span class="bias-tag bias-2">Lean Left</span>
+            {% elif article.outlet.bias_score == 3 %}
+                <span class="bias-tag bias-3">Center</span>
+            {% elif article.outlet.bias_score == 4 %}
+                <span class="bias-tag bias-4">Lean Right</span>
+            {% elif article.outlet.bias_score == 5 %}
+                <span class="bias-tag bias-5">Right</span>
+            {% else %}
+                <span class="bias-tag bias-none">Unrated</span>
+            {% endif %}
+
+            {% if article.bias_score and article.bias_score != article.outlet.bias_score %}
+                {% if article.bias_score == 1 %}
+                    <span class="bias-tag bias-1">Article: Left</span>
+                {% elif article.bias_score == 2 %}
+                    <span class="bias-tag bias-2">Article: Lean Left</span>
+                {% elif article.bias_score == 3 %}
+                    <span class="bias-tag bias-3">Article: Center</span>
+                {% elif article.bias_score == 4 %}
+                    <span class="bias-tag bias-4">Article: Lean Right</span>
+                {% elif article.bias_score == 5 %}
+                    <span class="bias-tag bias-5">Article: Right</span>
+                {% endif %}
+            {% endif %}
+        </div>
+
+        <h1>{{ article.title }}</h1>
+
+        <hr class="divider">
+
+        <div class="article-body">{{ article.content | safe }}</div>
+
+        <div class="source-link">
+            Original source: <a href="{{ article.url }}" target="_blank">{{ article.url }}</a>
+        </div>
+
+    </div>
+</div>
+
+</body>
+</html>

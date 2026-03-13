@@ -10,23 +10,6 @@ services:
     volumes:
       - ./postgres_data:/var/lib/postgresql/data
 
-  news_fetcher:
-    build:
-      context: .
-      dockerfile: news_fetcher/Dockerfile
-    depends_on:
-      - postgres
-    command: sh -c "sleep 10 && python -m news_fetcher.fetch_and_store_articles"
-    environment:
-      DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_HOST: postgres
-      POSTGRES_DB: ${POSTGRES_DB}
-      NEWS_API_KEY: ${NEWS_API_KEY}
-      OLLAMA_HOST: ${OLLAMA_HOST}
-      GNEWS_API_KEY: ${GNEWS_API_KEY}
-
   scheduler:
     build:
       context: .
@@ -41,8 +24,9 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_DB: ${POSTGRES_DB}
       NEWS_API_KEY: ${NEWS_API_KEY}
-      OLLAMA_HOST: ${OLLAMA_HOST}
       GNEWS_API_KEY: ${GNEWS_API_KEY}
+      OLLAMA_HOST: ${OLLAMA_HOST}
+      OLLAMA_MODEL: ${OLLAMA_MODEL}
     restart: unless-stopped
 
   app:
@@ -54,13 +38,14 @@ services:
     command: sh -c "sleep 5 && python -m aggregator.app"
     environment:
       DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
-      POSTGRES_USER: p${POSTGRES_USER}s
+      POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_HOST: postgres
       POSTGRES_DB: ${POSTGRES_DB}
       NEWS_API_KEY: ${NEWS_API_KEY}
-      OLLAMA_HOST: ${OLLAMA_HOST}
       GNEWS_API_KEY: ${GNEWS_API_KEY}
+      OLLAMA_HOST: ${OLLAMA_HOST}
+      OLLAMA_MODEL: ${OLLAMA_MODEL}
     volumes:
       - .:/app
 

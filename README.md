@@ -73,29 +73,6 @@ Authentication is planned for a future release.
 
 ---
 
-## Project Structure
-
-```
-muckscraper/
-├── aggregator/
-│   ├── __init__.py          # Flask app factory, routes
-│   ├── app.py               # App entry point
-│   ├── models.py            # Database models
-│   └── templates/
-│       └── articles.html    # Main UI template
-├── news_fetcher/
-│   ├── fetch_and_store_articles.py   # Article fetching logic
-│   ├── scheduler.py                  # Hourly fetch scheduler
-│   ├── summarizer.py                 # LLM summarization
-│   └── outlet_bias_llm.py           # LLM bias scoring
-├── docker-compose.yml
-├── Dockerfile
-├── requirements.txt
-└── README.md
-```
-
----
-
 ## Customization
 
 MuckScraper is designed to be flexible. Here are the main things you can tailor:

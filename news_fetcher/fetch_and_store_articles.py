@@ -9,6 +9,7 @@ from news_fetcher.scraper import scrape_article
 from datetime import datetime
 import requests
 import os
+import json
 from news_fetcher.story_grouper import find_or_create_story
 from datetime import datetime, timedelta
 
@@ -229,6 +230,16 @@ def fetch_newsapi(topic_name, mode="top", query=None, country="us", category=Non
 
         store_articles(normalized, topic_name)
 
+        # Store raw payload
+        from aggregator.models import RawArticlePayload
+        raw = RawArticlePayload(
+            source="newsapi",
+            topic_name=topic_name,
+            payload=json.dumps(results),
+        )
+        db.session.add(raw)
+        db.session.commit()
+
     except Exception as e:
         print(f"[NewsAPI] Error fetching {topic_name}: {e}")
 
@@ -298,8 +309,135 @@ def fetch_gnews(topic_name, query=None, category=None):
 
         store_articles(normalized, topic_name)
 
+        # Store raw payload
+        from aggregator.models import RawArticlePayload
+        raw = RawArticlePayload(
+            source="gnews",
+            topic_name=topic_name,
+            payload=json.dumps(data),
+        )
+        db.session.add(raw)
+        db.session.commit()
+
     except Exception as e:
         print(f"[GNews] Error fetching {topic_name}: {e}")
+    
+
+def regroup_ungrouped_stories():
+    """
+    Find single-article stories from the last 7 days and attempt
+    to re-group them using the LLM grouper.
+    """
+    from news_fetcher.story_grouper import get_candidate_stories, ask_ollama_for_match
+
+    if not check_ollama_status():
+        print("Ollama offline, skipping re-grouping.")
+        return
+
+    cutoff = datetime.utcnow() - timedelta(days=7)
+
+    ungrouped = Story.query.filter(Story.created_at >= cutoff).all()
+    ungrouped = [s for s in ungrouped if len(s.articles) == 1]
+
+    if not ungrouped:
+        print("No ungrouped stories to re-group.")
+        return
+
+    print(f"Found {len(ungrouped)} single-article stories to re-group...")
+
+    all_recent = Story.query.filter(Story.created_at >= cutoff).all()
+    multi_article_stories = [s for s in all_recent if len(s.articles) > 1]
+
+    merged = 0
+    for story in ungrouped:
+        if not story.articles:
+            continue
+
+        article = story.articles[0]
+
+        # Only match — never create new stories during regrouping
+        candidates = get_candidate_stories(article.title, multi_article_stories)
+        if not candidates:
+            continue
+
+        matched = ask_ollama_for_match(article.title, candidates)
+
+        if matched and matched.id != story.id:
+            print(f"  Re-grouped '{story.title}' → '{matched.title}'")
+
+            # Move article to matched story
+            article.story_id = matched.id
+
+            # Flush BEFORE deleting to ensure story_id update is written first
+            db.session.flush()
+
+            for topic in story.topics:
+                if topic not in matched.topics:
+                    matched.topics.append(topic)
+
+            db.session.delete(story)
+            merged += 1
+
+            if matched not in multi_article_stories:
+                multi_article_stories.append(matched)
+
+    db.session.commit()
+    print(f"Re-grouping complete. Merged {merged} stories.")
+
+
+def retry_unsummarized_stories(batch_size=10):
+    """Find stories without summaries and generate them — capped at batch_size."""
+    if not check_ollama_status():
+        print("Ollama offline, skipping auto-summarization.")
+        return
+
+    unsummarized = Story.query.filter(
+        (Story.summary == None) |
+        (Story.summary == Story.title)
+    ).limit(batch_size).all()
+
+    if not unsummarized:
+        print("All stories have summaries.")
+        return
+
+    print(f"Summarizing up to {batch_size} stories...")
+    for story in unsummarized:
+        if not story.articles:
+            continue
+        summary = summarize_story(story)
+        if summary:
+            story.summary = summary
+            print(f"  Summarized: {story.title[:60]}")
+
+    db.session.commit()
+    print("Finished summarization batch.")
+
+
+def ollama_catchup():
+    """
+    Run all Ollama-dependent tasks that may have been skipped
+    while Ollama was offline.
+    """
+    print("=== Ollama catchup starting ===")
+    regroup_ungrouped_stories()
+    retry_unrated_outlets()
+    retry_unsummarized_stories(batch_size=10)
+    print("=== Ollama catchup complete ===")
+
+
+def cleanup_old_payloads():
+    """Delete raw API payloads older than 30 days."""
+    from aggregator.models import RawArticlePayload
+    cutoff = datetime.utcnow() - timedelta(days=30)
+    old = RawArticlePayload.query.filter(RawArticlePayload.fetched_at < cutoff).all()
+    if old:
+        print(f"Deleting {len(old)} raw payloads older than 30 days...")
+        for payload in old:
+            db.session.delete(payload)
+        db.session.commit()
+        print("Cleanup complete.")
+    else:
+        print("No old payloads to clean up.")
 
 
 def fetch_and_store_articles(topic_name, mode="top", query=None,
@@ -312,6 +450,8 @@ def fetch_and_store_articles(topic_name, mode="top", query=None,
     fetch_newsapi(topic_name, mode=mode, query=query,
                   country=country, category=category)
     fetch_gnews(topic_name, query=gnews_query, category=gnews_category)
+    retry_unsummarized_stories()
+    cleanup_old_payloads()
 
 
 if __name__ == "__main__":

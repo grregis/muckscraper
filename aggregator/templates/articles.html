@@ -1,14 +1,58 @@
 <!DOCTYPE html>
-<html>
+<html data-theme="light">
 <head>
     <title>MuckScraper: All the muck that's fit to scrape</title>
     <style>
+        :root {
+            --accent:        #a43cb5;
+            --accent-light:  #c06ed0;
+            --accent-dark:   #7a2d88;
+
+            /* Light mode */
+            --bg:            #f4f4f4;
+            --surface:       #ffffff;
+            --sidebar-bg:    #1e1e2e;
+            --sidebar-text:  #cdd6f4;
+            --sidebar-muted: #888;
+            --sidebar-hover: #ffffff;
+            --sidebar-active-bg: #2a2a3e;
+            --text:          #222;
+            --text-muted:    #666;
+            --text-faint:    #999;
+            --border:        #f0f0f0;
+            --summary-bg:    #f8f9ff;
+            --input-border:  #ccc;
+            --btn-muted-bg:  #eee;
+            --btn-muted-text:#555;
+            --shadow:        rgba(0,0,0,0.08);
+        }
+
+        [data-theme="dark"] {
+            --bg:            #13131f;
+            --surface:       #1e1e2e;
+            --sidebar-bg:    #111120;
+            --sidebar-text:  #cdd6f4;
+            --sidebar-muted: #666;
+            --sidebar-hover: #ffffff;
+            --sidebar-active-bg: #2a2a3e;
+            --text:          #cdd6f4;
+            --text-muted:    #888;
+            --text-faint:    #666;
+            --border:        #2a2a3e;
+            --summary-bg:    #252535;
+            --input-border:  #444;
+            --btn-muted-bg:  #2a2a3e;
+            --btn-muted-text:#aaa;
+            --shadow:        rgba(0,0,0,0.3);
+        }
+
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
             font-family: Arial, sans-serif;
-            background: #f4f4f4;
-            color: #222;
+            background: var(--bg);
+            color: var(--text);
+            transition: background 0.2s, color 0.2s;
         }
 
         .layout {
@@ -16,21 +60,34 @@
             min-height: 100vh;
         }
 
+        /* ── Sidebar ── */
         .sidebar {
             width: 220px;
             min-width: 220px;
-            background: #1e1e2e;
-            color: #cdd6f4;
-            padding: 24px 0;
+            background: var(--sidebar-bg);
+            color: var(--sidebar-text);
             display: flex;
             flex-direction: column;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+            box-shadow: 3px 0 12px rgba(164, 60, 181, 0.25);
+            z-index: 10;
+        }
+
+        .sidebar-inner {
+            display: flex;
+            flex-direction: column;
+            min-height: 100%;
+            padding: 24px 0;
         }
 
         .sidebar h2 {
             font-size: 13px;
             text-transform: uppercase;
             letter-spacing: 1px;
-            color: #888;
+            color: var(--accent-light);
             padding: 0 20px 12px 20px;
             border-bottom: 1px solid #333;
             margin-bottom: 12px;
@@ -45,25 +102,25 @@
         }
 
         .topic-block.active {
-            border-left: 3px solid #89b4fa;
-            background: #2a2a3e;
+            border-left: 3px solid var(--accent);
+            background: var(--sidebar-active-bg);
         }
 
         .topic-block a {
             flex: 1;
             padding: 8px 8px 8px 17px;
-            color: #cdd6f4;
+            color: var(--sidebar-text);
             text-decoration: none;
             font-size: 14px;
         }
 
-        .topic-block.active a { color: #89b4fa; font-weight: bold; }
-        .topic-block a:hover { color: #fff; }
+        .topic-block.active a { color: var(--accent-light); font-weight: bold; }
+        .topic-block a:hover  { color: var(--sidebar-hover); }
 
         .fetch-btn {
             background: none;
             border: 1px solid #444;
-            color: #888;
+            color: var(--sidebar-muted);
             font-size: 11px;
             padding: 3px 6px;
             border-radius: 3px;
@@ -71,7 +128,7 @@
             white-space: nowrap;
         }
 
-        .fetch-btn:hover { color: #89b4fa; border-color: #89b4fa; }
+        .fetch-btn:hover { color: var(--accent-light); border-color: var(--accent-light); }
 
         .sidebar-divider {
             border: none;
@@ -79,15 +136,21 @@
             margin: 4px 20px;
         }
 
-        .ollama-status {
+        .sidebar-footer {
             margin-top: auto;
-            padding: 16px 20px;
             border-top: 1px solid #333;
+            padding: 12px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .ollama-status {
             display: flex;
             align-items: center;
             gap: 8px;
             font-size: 12px;
-            color: #888;
+            color: var(--sidebar-muted);
         }
 
         .status-dot {
@@ -101,17 +164,45 @@
         .status-dot.online  { background: #a6e3a1; }
         .status-dot.offline { background: #f38ba8; }
 
+        /* ── Main area ── */
         .main {
             flex: 1;
             padding: 30px 40px;
             max-width: 900px;
+            position: relative;
         }
 
-        h1 { font-size: 24px; margin-bottom: 8px; color: #1e1e2e; }
+        .main-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            gap: 12px;
+        }
+
+        h1 { font-size: 24px; color: var(--accent); }
+
+        .theme-toggle {
+            background: var(--surface);
+            border: 1px solid var(--input-border);
+            color: var(--text);
+            padding: 6px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 13px;
+            white-space: nowrap;
+            flex-shrink: 0;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        .theme-toggle:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
 
         .active-topic-label {
             font-size: 13px;
-            color: #89b4fa;
+            color: var(--accent-light);
             margin-bottom: 20px;
             font-style: italic;
         }
@@ -127,29 +218,33 @@
             padding: 8px 12px;
             width: 300px;
             font-size: 15px;
-            border: 1px solid #ccc;
+            border: 1px solid var(--input-border);
             border-radius: 4px;
+            background: var(--surface);
+            color: var(--text);
         }
 
         .search-bar button {
             padding: 8px 16px;
             font-size: 15px;
-            background: #1e1e2e;
+            background: var(--accent);
             color: white;
             border: none;
             border-radius: 4px;
             cursor: pointer;
         }
 
-        .search-bar button:hover { background: #333; }
-        .hint { font-size: 12px; color: #999; margin-bottom: 24px; }
+        .search-bar button:hover { background: var(--accent-dark); }
 
+        .hint { font-size: 12px; color: var(--text-faint); margin-bottom: 24px; }
+
+        /* ── Story cards ── */
         .story {
-            background: white;
+            background: var(--surface);
             border-radius: 6px;
             padding: 16px 20px;
             margin-bottom: 20px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            box-shadow: 0 1px 3px var(--shadow);
         }
 
         .story-header {
@@ -160,16 +255,16 @@
             gap: 12px;
         }
 
-        .story h2 { font-size: 17px; color: #1e1e2e; }
+        .story h2 { font-size: 17px; color: var(--text); }
 
         .summary {
-            background: #f8f9ff;
-            border-left: 3px solid #89b4fa;
+            background: var(--summary-bg);
+            border-left: 3px solid var(--accent);
             padding: 10px 14px;
             margin-bottom: 12px;
             font-size: 14px;
             line-height: 1.6;
-            color: #333;
+            color: var(--text);
             border-radius: 0 4px 4px 0;
         }
 
@@ -177,24 +272,40 @@
             font-size: 11px;
             font-weight: bold;
             text-transform: uppercase;
-            color: #89b4fa;
+            color: var(--accent-light);
             letter-spacing: 0.5px;
             margin-bottom: 5px;
         }
 
+        .summary p           { margin-bottom: 0.7em; }
+        .summary p:last-child { margin-bottom: 0; }
+
+        .summary-section-label {
+            color: var(--accent-light);
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .story ul.summary-bullets {
+            margin: 4px 0 0.7em 1.2em;
+            list-style: disc;
+        }
+
+        .summary-bullets li {
+            margin-bottom: 0.3em;
+            font-size: 14px;
+            line-height: 1.5;
+            border-bottom: none !important;
+            padding: 0 !important;
+            display: list-item !important;
+        }
+
         .no-summary {
             font-size: 13px;
-            color: #aaa;
+            color: var(--text-faint);
             font-style: italic;
             margin-bottom: 10px;
-        }
-
-        .summary p {
-            margin-bottom: 0.7em;
-        }
-
-        .summary p:last-child {
-            margin-bottom: 0;
         }
 
         .btn {
@@ -207,11 +318,11 @@
             white-space: nowrap;
         }
 
-        .btn-dark    { background: #1e1e2e; color: #cdd6f4; }
-        .btn-dark:hover { background: #333; }
-        .btn-muted   { background: #eee; color: #555; }
-        .btn-muted:hover { background: #ddd; }
-        .btn-orange  { background: #fab387; color: #1e1e2e; }
+        .btn-dark         { background: var(--accent); color: white; }
+        .btn-dark:hover   { background: var(--accent-dark); }
+        .btn-muted        { background: var(--btn-muted-bg); color: var(--btn-muted-text); }
+        .btn-muted:hover  { background: var(--input-border); }
+        .btn-orange       { background: #fab387; color: #1e1e2e; }
         .btn-orange:hover { background: #f9a070; }
 
         .action-row {
@@ -226,7 +337,7 @@
         .story ul li {
             padding: 6px 0;
             font-size: 14px;
-            border-bottom: 1px solid #f0f0f0;
+            border-bottom: 1px solid var(--border);
             display: flex;
             align-items: center;
             flex-wrap: wrap;
@@ -235,19 +346,13 @@
 
         .story ul li:last-child { border-bottom: none; }
 
-        .article-title { color: #333; text-decoration: none; }
-        .article-title:hover { color: #89b4fa; text-decoration: underline; }
+        .article-title       { color: var(--text); text-decoration: none; }
+        .article-title:hover { color: var(--accent); text-decoration: underline; }
 
-        .full-text-link {
-            font-size: 11px;
-            color: #89b4fa;
-            text-decoration: none;
-            margin-left: 4px;
-        }
-
+        .full-text-link       { font-size: 11px; color: var(--accent-light); text-decoration: none; margin-left: 4px; }
         .full-text-link:hover { text-decoration: underline; }
 
-        .outlet-name { color: #888; font-size: 12px; }
+        .outlet-name { color: var(--text-muted); font-size: 12px; }
 
         .bias-tag {
             display: inline-block;
@@ -266,7 +371,7 @@
 
         .article-actions { margin-left: auto; display: flex; gap: 4px; }
 
-        .empty { color: #999; font-style: italic; margin-top: 40px; }
+        .empty { color: var(--text-faint); font-style: italic; margin-top: 40px; }
     </style>
 </head>
 <body>
@@ -274,33 +379,52 @@
 <div class="layout">
 
     <div class="sidebar">
-        <h2>Topics</h2>
+        <div class="sidebar-inner">
+            <h2>Topics</h2>
 
-        {% for topic in topics %}
-        <div class="topic-block {% if active_label == topic.label %}active{% endif %}">
-            <a href="/articles?topic={{ topic.label | urlencode }}">{{ topic.label }}</a>
-            <form method="POST" action="/fetch" style="display:inline;">
-                <input type="hidden" name="mode"           value="{{ topic.mode }}">
-                <input type="hidden" name="query"          value="{{ topic.query or '' }}">
-                <input type="hidden" name="country"        value="{{ topic.country or '' }}">
-                <input type="hidden" name="category"       value="{{ topic.category or '' }}">
-                <input type="hidden" name="label"          value="{{ topic.label }}">
-                <input type="hidden" name="gnews_query"    value="{{ topic.gnews_query or '' }}">
-                <input type="hidden" name="gnews_category" value="{{ topic.gnews_category or '' }}">
-                <button type="submit" class="fetch-btn">↻</button>
-            </form>
-        </div>
-        <hr class="sidebar-divider">
-        {% endfor %}
+            {% for topic in topics %}
+            <div class="topic-block {% if active_label == topic.label %}active{% endif %}">
+                <a href="/articles?topic={{ topic.label | urlencode }}">{{ topic.label }}</a>
+                <form method="POST" action="/fetch" style="display:inline;">
+                    <input type="hidden" name="mode"           value="{{ topic.mode }}">
+                    <input type="hidden" name="query"          value="{{ topic.query or '' }}">
+                    <input type="hidden" name="country"        value="{{ topic.country or '' }}">
+                    <input type="hidden" name="category"       value="{{ topic.category or '' }}">
+                    <input type="hidden" name="label"          value="{{ topic.label }}">
+                    <input type="hidden" name="gnews_query"    value="{{ topic.gnews_query or '' }}">
+                    <input type="hidden" name="gnews_category" value="{{ topic.gnews_category or '' }}">
+                    <button type="submit" class="fetch-btn">↻</button>
+                </form>
+            </div>
+            <hr class="sidebar-divider">
+            {% endfor %}
 
-        <div class="ollama-status">
-            <div class="status-dot" id="ollama-dot"></div>
-            <span id="ollama-label">Checking Ollama...</span>
+            <div class="sidebar-footer">
+                <div class="ollama-status">
+                    <div class="status-dot" id="ollama-dot"></div>
+                    <span id="ollama-label">Checking Ollama...</span>
+                </div>
+                <form method="POST" action="/ollama-catchup">
+                    <input type="hidden" name="label" value="{{ active_label or '' }}">
+                    <button type="submit" class="fetch-btn" style="width:100%; text-align:left; padding: 4px 8px;">
+                        ↻ Ollama Catchup
+                    </button>
+                </form>
+                <form method="POST" action="/scrape-all-missing">
+                    <input type="hidden" name="label" value="{{ active_label or '' }}">
+                    <button type="submit" class="fetch-btn" style="width:100%; text-align:left; padding: 4px 8px;">
+                        ↻ Scrape Missing
+                    </button>
+                </form>
+            </div>
         </div>
     </div>
 
     <div class="main">
-        <h1>MuckScraper: All the muck that's fit to scrape</h1>
+        <div class="main-header">
+            <h1>MuckScraper: All the muck that's fit to scrape</h1>
+            <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">🌙 Dark</button>
+        </div>
 
         {% if active_label %}
             <p class="active-topic-label">Showing: {{ active_label }}</p>
@@ -324,11 +448,32 @@
                 {% if story.summary and story.summary != story.title %}
                     <div class="summary">
                         <div class="summary-label">AI Summary</div>
-                        {% for paragraph in story.summary.split('\n') %}
-                            {% if paragraph.strip() %}
-                                <p>{{ paragraph.strip() }}</p>
+                        {% set in_bullets = [] %}
+                        {% for line in story.summary.split('\n') %}
+                            {% set l = line.strip() %}
+                            {% if l %}
+                                {% if l.startswith('•') %}
+                                    {% if not in_bullets %}
+                                        <ul class="summary-bullets">
+                                        {% set _ = in_bullets.append(1) %}
+                                    {% endif %}
+                                    <li>{{ l[1:].strip() }}</li>
+                                {% else %}
+                                    {% if in_bullets %}
+                                        </ul>
+                                        {% set _ = in_bullets.clear() %}
+                                    {% endif %}
+                                    {% if ':' in l and l.split(':')[0].strip()|length < 30 %}
+                                        {% set label = l.split(':', 1)[0].strip() %}
+                                        {% set rest = l.split(':', 1)[1].strip() %}
+                                        <p><strong class="summary-section-label">{{ label }}:</strong> {{ rest }}</p>
+                                    {% else %}
+                                        <p>{{ l }}</p>
+                                    {% endif %}
+                                {% endif %}
                             {% endif %}
                         {% endfor %}
+                        {% if in_bullets %}</ul>{% endif %}
                     </div>
                     <div class="action-row">
                         <form method="POST" action="/summarize/{{ story.id }}">
@@ -355,6 +500,13 @@
 
                         {% if article.content and article.content | length > 500 %}
                         <a class="full-text-link" href="/article/{{ article.id }}">[full text]</a>
+                        {% else %}
+                        <form method="POST" action="/scrape-article/{{ article.id }}" style="display:inline;">
+                            <input type="hidden" name="label" value="{{ active_label or '' }}">
+                            <button type="submit" class="full-text-link" style="background:none; border:none; cursor:pointer; padding:0;">
+                                [scrape]
+                            </button>
+                        </form>
                         {% endif %}
 
                         <span class="outlet-name">— {{ article.outlet.name }}</span>
@@ -418,6 +570,25 @@
 </div>
 
 <script>
+    // ── Theme ──
+    function applyTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        const btn = document.getElementById('theme-toggle');
+        btn.textContent = theme === 'dark' ? '☀️ Light' : '🌙 Dark';
+    }
+
+    function toggleTheme() {
+        const current = document.documentElement.getAttribute('data-theme');
+        const next = current === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('muckscraper-theme', next);
+        applyTheme(next);
+    }
+
+    // Apply saved theme on load
+    const savedTheme = localStorage.getItem('muckscraper-theme') || 'light';
+    applyTheme(savedTheme);
+
+    // ── Ollama status ──
     function checkOllamaStatus() {
         fetch('/ollama-status')
             .then(r => r.json())

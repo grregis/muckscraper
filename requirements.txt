@@ -9,3 +9,4 @@ apscheduler
 python-dotenv
 playwright
 bleach
+readability-lxml

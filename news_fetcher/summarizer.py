@@ -2,6 +2,7 @@
 
 import requests
 import os
+import re
 
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "")
 MODEL = os.environ.get("OLLAMA_MODEL", "mannix/llama3.1-8b-lexi:latest")
@@ -16,6 +17,20 @@ def check_ollama_status():
         return False
 
 
+def strip_html(text):
+    """Strip HTML tags and clean up whitespace for LLM input."""
+    if not text:
+        return ""
+    # Remove HTML tags
+    text = re.sub(r'<[^>]+>', ' ', text)
+    # Decode common HTML entities
+    text = text.replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>') \
+               .replace('&nbsp;', ' ').replace('&quot;', '"').replace('&#39;', "'")
+    # Collapse whitespace
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+
 def summarize_story(story):
     """
     Given a Story object with related articles, ask Ollama to generate
@@ -25,35 +40,41 @@ def summarize_story(story):
     if not story.articles:
         return None
 
-    # Build input text from titles + content snippets
     article_texts = []
-    for i, article in enumerate(story.articles[:10], 1):  # cap at 10 articles
+    for i, article in enumerate(story.articles[:10], 1):
         text = f"{i}. Title: {article.title}"
         if article.content:
-            # NewsAPI content snippets are often truncated, use what we have
-            snippet = article.content[:500].strip()
-            text += f"\n   Snippet: {snippet}"
+            # Strip HTML before sending to Ollama
+            clean_content = strip_html(article.content)
+            # Use more content now that we have full scraped articles
+            snippet = clean_content[:1500].strip()
+            text += f"\n   Content: {snippet}"
         article_texts.append(text)
 
     combined = "\n\n".join(article_texts)
 
-    prompt = f"""You are a professional news analyst. Below are multiple news articles covering the same story.
+    prompt = f"""You are a professional news analyst writing in the Smart Brevity style.
 
-Your task is to write a comprehensive, detailed summary of this story using clearly separated paragraphs.
+Below are multiple news articles covering the same story. Write a structured summary using EXACTLY this format:
 
-Structure your summary as follows:
-- Paragraph 1: What happened and the key facts
-- Paragraph 2: Who is involved and their roles
-- Paragraph 3: Why this is significant
-- Paragraph 4: Different perspectives or angles covered across the sources
-- Paragraph 5: Important context or background (if relevant)
+The big picture: [One punchy, direct sentence summarizing what happened. No fluff.]
+
+Why it matters: [1-2 sentences explaining the significance.]
+
+What's happening:
+- [Key fact or development]
+- [Key fact or development]
+- [Key fact or development]
+- [Add more bullets if needed, max 6]
+
+What's next: [One sentence on what to watch for or what comes next.]
 
 Rules:
-- Separate each paragraph with a blank line
-- Write in clear, neutral journalistic prose
-- Do not use bullet points, headers, or markdown formatting
-- Do not include labels like "Paragraph 1:" in your response
-- Just write the paragraphs directly, separated by blank lines
+- Use EXACTLY the labels shown above including the colon
+- Bullets must start with • 
+- Keep every section tight and direct
+- No markdown, no extra formatting, no commentary
+- Do not add any text before or after the structure above
 
 Articles:
 {combined}
@@ -68,7 +89,7 @@ Detailed Summary:"""
                 "prompt": prompt,
                 "stream": False,
             },
-            timeout=120,  # summaries take longer than bias scoring
+            timeout=120,
         )
         response.raise_for_status()
 

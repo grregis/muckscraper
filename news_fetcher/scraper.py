@@ -6,12 +6,15 @@ import bleach
 import time
 import os
 
-HEADERS = {
+HEADERS_DEFAULT = {
     "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
                   "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
 
-# Tags and attributes we allow through sanitization
+HEADERS_GOOGLEBOT = {
+    "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
+}
+
 ALLOWED_TAGS = [
     "p", "br", "h1", "h2", "h3", "h4", "h5", "h6",
     "strong", "em", "b", "i", "u",
@@ -28,6 +31,7 @@ ALLOWED_ATTRIBUTES = {
     "th":  ["colspan", "rowspan"],
 }
 
+# Sites that need Playwright (heavy JS)
 PLAYWRIGHT_DOMAINS = [
     "bloomberg.com",
     "wsj.com",
@@ -38,6 +42,17 @@ PLAYWRIGHT_DOMAINS = [
     "wired.com",
 ]
 
+# Sites to try Googlebot user agent on
+GOOGLEBOT_DOMAINS = [
+    "axios.com",
+    "politico.com",
+    "theatlantic.com",
+    "thedailybeast.com",
+    "businessinsider.com",
+    "sfgate.com",
+]
+
+# Sites to skip entirely
 SKIP_DOMAINS = [
     "youtube.com",
     "twitter.com",
@@ -56,8 +71,11 @@ def needs_playwright(url):
     return any(domain in url.lower() for domain in PLAYWRIGHT_DOMAINS)
 
 
+def use_googlebot(url):
+    return any(domain in url.lower() for domain in GOOGLEBOT_DOMAINS)
+
+
 def sanitize_html(raw_html):
-    """Strip dangerous tags/attributes but keep formatting."""
     return bleach.clean(
         raw_html,
         tags=ALLOWED_TAGS,
@@ -66,17 +84,45 @@ def sanitize_html(raw_html):
     )
 
 
-def extract_article_html_bs4(url):
+def extract_with_readability(html, url):
     """
-    Scrape article using BS4 and return sanitized HTML string.
+    Use Mozilla's readability algorithm to extract main article content.
+    Returns sanitized HTML or None.
     """
     try:
-        response = requests.get(url, headers=HEADERS, timeout=10)
+        from readability import Document
+        doc = Document(html)
+        content = doc.summary()
+        if content and len(content) > 200:
+            sanitized = sanitize_html(content)
+            if len(sanitized) > 200:
+                print(f"  [Readability] Extracted {len(sanitized)} chars from {url[:60]}")
+                return sanitized
+    except Exception as e:
+        print(f"  [Readability] Error: {e}")
+    return None
+
+
+def extract_article_html_bs4(url, headers=None):
+    """
+    Scrape article using BS4 and return sanitized HTML string.
+    Falls back to readability if direct extraction fails.
+    """
+    if headers is None:
+        headers = HEADERS_DEFAULT
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
+        html = response.text
 
-        soup = BeautifulSoup(response.text, "html.parser")
+        # Try readability first — it's smarter than manual selectors
+        content = extract_with_readability(html, url)
+        if content:
+            return content
 
-        # Remove junk elements
+        # Fall back to manual BS4 extraction
+        soup = BeautifulSoup(html, "html.parser")
+
         for tag in soup(["script", "style", "nav", "header", "footer",
                          "aside", "advertisement", "figure", "figcaption",
                          "iframe", "noscript", "button", "form"]):
@@ -84,12 +130,10 @@ def extract_article_html_bs4(url):
 
         content_html = None
 
-        # 1. Try <article> tag
         article = soup.find("article")
         if article:
             content_html = str(article)
 
-        # 2. Try common content containers
         if not content_html or len(content_html) < 200:
             for selector in [
                 {"class": "article-body"},
@@ -109,7 +153,6 @@ def extract_article_html_bs4(url):
                     content_html = str(found)
                     break
 
-        # 3. Fall back to wrapping all <p> tags
         if not content_html or len(content_html) < 200:
             paragraphs = soup.find_all("p")
             if paragraphs:
@@ -140,12 +183,11 @@ def extract_article_html_playwright(url):
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
-            page.set_extra_http_headers(HEADERS)
+            page.set_extra_http_headers(HEADERS_DEFAULT)
 
             page.goto(url, timeout=15000, wait_until="domcontentloaded")
             time.sleep(2)
 
-            # Remove junk elements
             page.evaluate("""
                 ['script','style','nav','header','footer','aside',
                  'iframe','button','form']
@@ -153,6 +195,15 @@ def extract_article_html_playwright(url):
                 .forEach(el => el.remove()))
             """)
 
+            html = page.content()
+            browser.close()
+
+            # Try readability on the rendered HTML first
+            content = extract_with_readability(html, url)
+            if content:
+                return content
+
+            # Fall back to manual extraction
             content_html = page.evaluate("""
                 () => {
                     const article = document.querySelector('article');
@@ -168,13 +219,10 @@ def extract_article_html_playwright(url):
                         if (el && el.innerText.length > 200) return el.innerHTML;
                     }
 
-                    // Fall back to all paragraphs
                     const paras = Array.from(document.querySelectorAll('p'));
                     return '<div>' + paras.map(p => p.outerHTML).join('') + '</div>';
                 }
-            """)
-
-            browser.close()
+            """) if False else None  # page already closed, use html from above
 
             if content_html and len(content_html) > 200:
                 sanitized = sanitize_html(content_html)
@@ -192,23 +240,61 @@ def extract_article_html_playwright(url):
         return None
 
 
+def try_archive_fallback(url):
+    """
+    Try to fetch article from archive.ph as a paywall fallback.
+    Returns sanitized HTML or None.
+    """
+    archive_url = f"https://archive.ph/{url}"
+    print(f"  [Archive] Trying archive.ph for {url[:60]}")
+    try:
+        response = requests.get(archive_url, headers=HEADERS_DEFAULT, timeout=15)
+        if response.status_code == 200:
+            content = extract_with_readability(response.text, archive_url)
+            if content:
+                print(f"  [Archive] Successfully extracted from archive.ph")
+                return content
+    except Exception as e:
+        print(f"  [Archive] Error: {e}")
+    return None
+
+
 def scrape_article(url):
     """
-    Main entry point. Try BS4 first, fall back to Playwright.
-    Returns sanitized HTML string or None.
+    Main entry point. Strategy:
+    1. Skip social/video domains entirely
+    2. For Playwright domains — use Playwright, fall back to archive.ph
+    3. For Googlebot domains — try Googlebot UA first
+    4. For everything else — try BS4 (with readability), fall back to Playwright, then archive.ph
+    Returns sanitized HTML or None.
     """
     if should_skip(url):
         print(f"  [Scraper] Skipping {url[:60]}")
         return None
 
+    # Playwright-first domains
     if needs_playwright(url):
         print(f"  [Scraper] Using Playwright for {url[:60]}")
-        return extract_article_html_playwright(url)
+        content = extract_article_html_playwright(url)
+        if not content:
+            content = try_archive_fallback(url)
+        return content
 
+    # Googlebot user agent domains
+    if use_googlebot(url):
+        print(f"  [Scraper] Using Googlebot UA for {url[:60]}")
+        content = extract_article_html_bs4(url, headers=HEADERS_GOOGLEBOT)
+        if not content:
+            content = extract_article_html_bs4(url, headers=HEADERS_DEFAULT)
+        if not content:
+            content = try_archive_fallback(url)
+        return content
+
+    # Default: BS4 with readability → Playwright → archive.ph
     content = extract_article_html_bs4(url)
-
     if not content:
         print(f"  [Scraper] BS4 failed, trying Playwright for {url[:60]}")
         content = extract_article_html_playwright(url)
-
+    if not content:
+        content = try_archive_fallback(url)
     return content

@@ -92,13 +92,20 @@ def create_app():
 
         try:
             from news_fetcher.summarizer import summarize_story, check_ollama_status
-            if not check_ollama_status():
+            print(f"[Summarize] Story {story_id}: '{story.title}'")
+            print(f"[Summarize] Articles: {len(story.articles)}")
+            ollama_ok = check_ollama_status()
+            print(f"[Summarize] Ollama reachable: {ollama_ok}")
+            if not ollama_ok:
                 print("Ollama is not reachable.")
             else:
+                print("[Summarize] Calling summarize_story...")
                 summary = summarize_story(story)
+                print(f"[Summarize] Got summary: {bool(summary)}")
                 if summary:
                     story.summary = summary
                     db.session.commit()
+                    print("[Summarize] Saved!")
         except Exception as e:
             print(f"Summarization error: {e}")
 
@@ -160,6 +167,85 @@ def create_app():
         article = Article.query.get_or_404(article_id)
         return render_template("article.html", article=article)
 
+    @app.route("/ollama-catchup", methods=["POST"])
+    def ollama_catchup_route():
+        label = request.form.get("label", "")
+        try:
+            from news_fetcher.fetch_and_store_articles import ollama_catchup
+            ollama_catchup()
+        except Exception as e:
+            print(f"Catchup error: {e}")
+        return redirect(f"/articles?topic={label}" if label else "/articles")
+
+    @app.route("/scrape-article/<int:article_id>", methods=["POST"])
+    def scrape_article_route(article_id):
+        article = Article.query.get_or_404(article_id)
+        label = request.form.get("label", "")
+        try:
+            from news_fetcher.scraper import scrape_article
+            content = scrape_article(article.url)
+            if content:
+                article.content = content
+                db.session.commit()
+                print(f"[Scrape] Successfully scraped article {article_id}")
+            else:
+                print(f"[Scrape] Could not scrape article {article_id}")
+        except Exception as e:
+            print(f"[Scrape] Error: {e}")
+        if label:
+            return redirect(url_for("list_articles", topic=label))
+        return redirect(url_for("list_articles"))
+
+    @app.route("/scrape-all-missing", methods=["POST"])
+    def scrape_all_missing():
+        label = request.form.get("label", "")
+        try:
+            from news_fetcher.scraper import scrape_article
+            # Find articles with no content or very short content (API snippets)
+            missing = Article.query.filter(
+                (Article.content == None) |
+                (Article.content == "") |
+                (db.func.length(Article.content) < 500)
+            ).limit(20).all()
+
+            if missing:
+                print(f"[Scrape] Attempting to scrape {len(missing)} articles...")
+                scraped = 0
+                for article in missing:
+                    content = scrape_article(article.url)
+                    if content:
+                        article.content = content
+                        scraped += 1
+                        print(f"[Scrape] Scraped: {article.title[:60]}")
+                db.session.commit()
+                print(f"[Scrape] Scraped {scraped} of {len(missing)} articles.")
+            else:
+                print("[Scrape] No articles missing full text.")
+        except Exception as e:
+            print(f"[Scrape] Error: {e}")
+        if label:
+            return redirect(url_for("list_articles", topic=label))
+        return redirect(url_for("list_articles"))
+
+    @app.route("/rescrape-article/<int:article_id>", methods=["POST"])
+    def rescrape_article_route(article_id):
+        article = Article.query.get_or_404(article_id)
+        label = request.form.get("label", "")
+        try:
+            from news_fetcher.scraper import scrape_article
+            content = scrape_article(article.url)
+            if content:
+                article.content = content
+                db.session.commit()
+                print(f"[Scrape] Successfully scraped article {article_id}")
+            else:
+                print(f"[Scrape] Could not scrape article {article_id}")
+        except Exception as e:
+            print(f"[Scrape] Error: {e}")
+        if label:
+            return redirect(url_for("list_articles", topic=label))
+        return redirect(url_for("list_articles"))
+        
     return app
 
 

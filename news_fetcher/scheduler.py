@@ -4,7 +4,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from aggregator import create_app, db
 from aggregator.models import AppSetting
-from news_fetcher.fetch_and_store_articles import fetch_and_store_articles
+from news_fetcher.fetch_and_store_articles import fetch_and_store_articles, ollama_catchup
 from datetime import datetime, timedelta
 import logging
 import sys
@@ -115,9 +115,28 @@ def should_fetch_now():
         return False
 
 
+# Track Ollama state between runs
+ollama_was_online = False
+
+
 def run_all_fetches():
+    global ollama_was_online
+
     logging.info("=== Starting scheduled fetch run ===")
     with app.app_context():
+        # Check if Ollama just came back online
+        from news_fetcher.summarizer import check_ollama_status
+        ollama_is_online = check_ollama_status()
+
+        if ollama_is_online and not ollama_was_online:
+            logging.info("Ollama just came back online — running catchup...")
+            try:
+                ollama_catchup()
+            except Exception as e:
+                logging.error(f"Ollama catchup error: {e}")
+
+        ollama_was_online = ollama_is_online
+
         for fetch in SCHEDULED_FETCHES:
             logging.info(f"--- Fetching: {fetch['label']} ---")
             try:

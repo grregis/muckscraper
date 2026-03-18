@@ -126,16 +126,21 @@ def find_or_create_story(article_title, db, Story, recent_stories):
 def clean_story_title(article_title):
     """
     Generate a clean story title from an article title.
-    Strips source attribution and truncates sensibly.
+    Only strips source attribution at the end, keeps the rest intact.
     """
-    # Remove common suffixes like " - Reuters" or " | BBC News"
+    # Strip source attribution suffixes like " - Reuters" or " | BBC News"
+    # but only if the suffix looks like a source name (short, at the end)
     for sep in [" - ", " | ", " — "]:
         if sep in article_title:
-            article_title = article_title.split(sep)[0]
+            parts = article_title.rsplit(sep, 1)
+            # Only strip if the suffix is short (likely a source name)
+            if len(parts[1].split()) <= 4:
+                article_title = parts[0]
+                break
 
-    # Truncate to reasonable length
+    # Truncate to 12 words max to keep titles readable
     words = article_title.split()
-    if len(words) > 8:
-        return " ".join(words[:8])
+    if len(words) > 12:
+        return " ".join(words[:12]) + "..."
 
     return article_title

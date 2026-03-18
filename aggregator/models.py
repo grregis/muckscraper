@@ -39,6 +39,9 @@ class Topic(db.Model):
 
 class Story(db.Model):
     __tablename__ = "stories"
+    __table_args__ = (
+        db.Index("ix_stories_created_at", "created_at"),
+    )
 
     id         = db.Column(db.Integer, primary_key=True)
     title      = db.Column(db.String, nullable=False)
@@ -51,6 +54,13 @@ class Story(db.Model):
 
 class Article(db.Model):
     __tablename__ = "articles"
+    __table_args__ = (
+        db.Index("ix_articles_url",        "url"),
+        db.Index("ix_articles_date",       "date"),
+        db.Index("ix_articles_outlet_id",  "outlet_id"),
+        db.Index("ix_articles_story_id",   "story_id"),
+        db.Index("ix_articles_bias_score", "bias_score"),
+    )
 
     id         = db.Column(db.Integer, primary_key=True)
     title      = db.Column(db.String, nullable=False)
@@ -58,7 +68,7 @@ class Article(db.Model):
     source     = db.Column(db.String)
     url        = db.Column(db.String, unique=True)
     outlet_id  = db.Column(db.Integer, db.ForeignKey("outlets.id"))
-    story_id   = db.Column(db.Integer, db.ForeignKey("stories.id"))   # ADD THIS LINE
+    story_id   = db.Column(db.Integer, db.ForeignKey("stories.id"))
     date       = db.Column(db.DateTime, default=datetime.utcnow)
     bias_score = db.Column(db.Float)
 
@@ -70,3 +80,17 @@ class AppSetting(db.Model):
 
     key   = db.Column(db.String, primary_key=True)
     value = db.Column(db.String)
+
+
+class RawArticlePayload(db.Model):
+    __tablename__ = "raw_article_payloads"
+    __table_args__ = (
+        db.Index("ix_raw_payload_fetched_at", "fetched_at"),
+        db.Index("ix_raw_payload_source",     "source"),
+    )
+
+    id         = db.Column(db.Integer, primary_key=True)
+    source     = db.Column(db.String, nullable=False)  # "newsapi" or "gnews"
+    topic_name = db.Column(db.String, nullable=False)
+    payload    = db.Column(db.Text, nullable=False)     # JSON string
+    fetched_at = db.Column(db.DateTime, default=datetime.utcnow)

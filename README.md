@@ -1,8 +1,20 @@
-# MuckScraper — All the Muck That's Fit to Scrape
+# # MuckScraper — All the Muck That's Fit to Scrape
 
 ### A Self-Hosted News Aggregator with LLM Analysis
 
-MuckScraper is a self-hosted news aggregation and analysis platform that collects articles from multiple sources, scrapes their full text, groups them into stories using LLM clustering, scores them for political bias, and presents everything in a clean web interface with on-demand AI summarization.
+> **TL;DR:** MuckScraper pulls news from multiple sources, groups articles about the same story together, scores every outlet for political bias, and gives you a Smart Brevity AI summary — all running on your own hardware with no subscriptions, no tracking, and no algorithm deciding what you see.
+
+---
+
+## Why This Is Different
+
+Most news aggregators just show you a firehose of headlines. MuckScraper does three things no other self-hosted tool does:
+
+**Cross-outlet story clustering** — Articles from CNN, Fox News, Reuters, and AP covering the same event are automatically grouped into a single story using LLM-assisted matching. See how different outlets cover the same story side by side.
+
+**Political bias scoring** — Every outlet is scored on a 1–5 left-to-right spectrum by your local LLM the first time it appears. Individual articles can be rated separately. No hardcoded bias lists — your LLM makes the call based on its own knowledge.
+
+**Smart Brevity summaries** — On-demand AI summaries follow the Axios Smart Brevity format: The big picture, Why it matters, What's happening, and What's next. Tight, structured, and actually readable.
 
 ---
 

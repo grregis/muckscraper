@@ -1,4 +1,4 @@
-# # MuckScraper — All the Muck That's Fit to Scrape
+# MuckScraper — All the Muck That's Fit to Scrape
 
 ### A Self-Hosted News Aggregator with LLM Analysis
 

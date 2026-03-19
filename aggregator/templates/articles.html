@@ -372,6 +372,30 @@
         .article-actions { margin-left: auto; display: flex; gap: 4px; }
 
         .empty { color: var(--text-faint); font-style: italic; margin-top: 40px; }
+
+        .pagination {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            padding: 20px 0 40px 0;
+        }
+
+        .page-btn {
+            background: var(--accent);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        .page-btn:hover { background: var(--accent-dark); }
+
+        .page-info {
+            font-size: 14px;
+            color: var(--text-muted);
+        }
     </style>
 </head>
 <body>
@@ -383,27 +407,23 @@
             <h2>Topics</h2>
 
             {% for topic in topics %}
-            <div class="topic-block {% if active_label == topic.label %}active{% endif %}">
-                <a href="/articles?topic={{ topic.label | urlencode }}">{{ topic.label }}</a>
-                <form method="POST" action="/fetch" style="display:inline;">
-                    <input type="hidden" name="mode"           value="{{ topic.mode }}">
-                    <input type="hidden" name="query"          value="{{ topic.query or '' }}">
-                    <input type="hidden" name="country"        value="{{ topic.country or '' }}">
-                    <input type="hidden" name="category"       value="{{ topic.category or '' }}">
-                    <input type="hidden" name="label"          value="{{ topic.label }}">
-                    <input type="hidden" name="gnews_query"    value="{{ topic.gnews_query or '' }}">
-                    <input type="hidden" name="gnews_category" value="{{ topic.gnews_category or '' }}">
-                    <button type="submit" class="fetch-btn">↻</button>
-                </form>
-            </div>
-            <hr class="sidebar-divider">
-            {% endfor %}
+        <div class="topic-block {% if active_label == topic.label %}active{% endif %}">
+            <a href="/articles?topic={{ topic.label | urlencode }}">{{ topic.label }}</a>
+        </div>
+        <hr class="sidebar-divider">
+        {% endfor %}
 
             <div class="sidebar-footer">
                 <div class="ollama-status">
                     <div class="status-dot" id="ollama-dot"></div>
                     <span id="ollama-label">Checking Ollama...</span>
                 </div>
+                <form method="POST" action="/wake-ollama">
+                    <input type="hidden" name="label" value="{{ active_label or '' }}">
+                    <button type="submit" class="fetch-btn" style="width:100%; text-align:left; padding: 4px 8px;">
+                        ⚡ Wake Ollama
+                    </button>
+                </form>
                 <form method="POST" action="/ollama-catchup">
                     <input type="hidden" name="label" value="{{ active_label or '' }}">
                     <button type="submit" class="fetch-btn" style="width:100%; text-align:left; padding: 4px 8px;">
@@ -414,6 +434,18 @@
                     <input type="hidden" name="label" value="{{ active_label or '' }}">
                     <button type="submit" class="fetch-btn" style="width:100%; text-align:left; padding: 4px 8px;">
                         ↻ Scrape Missing
+                    </button>
+                </form>
+                <form method="POST" action="/force-regroup">
+                    <input type="hidden" name="label" value="{{ active_label or '' }}">
+                    <button type="submit" class="fetch-btn" style="width:100%; text-align:left; padding: 4px 8px;">
+                        ⚡ Force Re-group
+                    </button>
+                </form>
+                <form method="POST" action="/reclassify-articles">
+                    <input type="hidden" name="label" value="{{ active_label or '' }}">
+                    <button type="submit" class="fetch-btn" style="width:100%; text-align:left; padding: 4px 8px;">
+                        ↻ Reclassify Topics
                     </button>
                 </form>
             </div>
@@ -563,7 +595,21 @@
             </div>
             {% endfor %}
         {% else %}
-            <p class="empty">No articles found. Try clicking ↻ next to a topic to fetch fresh articles.</p>
+            <p class="empty">No articles found. Use the fetch bar above or wait for the next scheduled fetch.</p>
+        {% endif %}
+
+        {% if total_pages > 1 %}
+        <div class="pagination">
+            {% if page > 1 %}
+                <a href="?{% if active_label %}topic={{ active_label | urlencode }}&{% endif %}page={{ page - 1 }}" class="page-btn">← Prev</a>
+            {% endif %}
+
+            <span class="page-info">Page {{ page }} of {{ total_pages }}</span>
+
+            {% if page < total_pages %}
+                <a href="?{% if active_label %}topic={{ active_label | urlencode }}&{% endif %}page={{ page + 1 }}" class="page-btn">Next →</a>
+            {% endif %}
+        </div>
         {% endif %}
 
     </div>

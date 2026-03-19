@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:14
+    image: pgvector/pgvector:pg14
     ports:
       - "5432:5432"
     environment:
@@ -27,6 +27,8 @@ services:
       GNEWS_API_KEY: ${GNEWS_API_KEY}
       OLLAMA_HOST: ${OLLAMA_HOST}
       OLLAMA_MODEL: ${OLLAMA_MODEL}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL}
+      OLLAMA_MAC: ${OLLAMA_MAC}
     restart: unless-stopped
 
   app:
@@ -46,6 +48,8 @@ services:
       GNEWS_API_KEY: ${GNEWS_API_KEY}
       OLLAMA_HOST: ${OLLAMA_HOST}
       OLLAMA_MODEL: ${OLLAMA_MODEL}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL}
+      OLLAMA_MAC: ${OLLAMA_MAC}
     volumes:
       - .:/app
 

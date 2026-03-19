@@ -2,7 +2,23 @@
 
 ### A Self-Hosted News Aggregator with LLM Analysis
 
-> **TL;DR:** MuckScraper pulls news from multiple sources, groups articles about the same story together, scores every outlet for political bias, and gives you a Smart Brevity AI summary — all running on your own hardware with no subscriptions, no tracking, and no algorithm deciding what you see.
+> **TL;DR:** MuckScraper pulls news from multiple sources, groups articles about the same story together using vector embeddings, scores every outlet for political bias, and gives you a Smart Brevity AI summary — all running on your own hardware with no subscriptions, no tracking, and no algorithm deciding what you see.
+
+---
+
+## Screenshots
+
+### Light Mode
+![MuckScraper Light Mode](screenshots/light_mode.png)
+
+### Dark Mode
+![MuckScraper Dark Mode](screenshots/dark_mode.png)
+
+### Full Article Reader
+![Full Article Reader](screenshots/article_reader.png)
+
+### Bias Scoring
+![Bias Scoring](screenshots/bias_tags.png)
 
 ---
 
@@ -10,7 +26,7 @@
 
 Most news aggregators just show you a firehose of headlines. MuckScraper does three things no other self-hosted tool does:
 
-**Cross-outlet story clustering** — Articles from CNN, Fox News, Reuters, and AP covering the same event are automatically grouped into a single story using LLM-assisted matching. See how different outlets cover the same story side by side.
+**Cross-outlet story clustering** — Articles from CNN, Fox News, Reuters, and AP covering the same event are automatically grouped into a single story using vector embeddings and semantic similarity. See how different outlets cover the same story side by side.
 
 **Political bias scoring** — Every outlet is scored on a 1–5 left-to-right spectrum by your local LLM the first time it appears. Individual articles can be rated separately. No hardcoded bias lists — your LLM makes the call based on its own knowledge.
 
@@ -20,19 +36,48 @@ Most news aggregators just show you a firehose of headlines. MuckScraper does th
 
 ## What It Does
 
-MuckScraper pulls news from NewsAPI and GNews across configurable topic categories on a 3-hour schedule. Articles are scraped for full text, grouped into stories by a local LLM, scored for outlet-level political bias, and displayed in a clean web interface. Users can trigger on-demand fetches, generate AI summaries for any story, view full scraped article text, and rate individual articles for bias.
+MuckScraper pulls news from multiple APIs across configurable topic categories on a 3-hour schedule. Articles are scraped for full text, classified into topics by an LLM, grouped into stories using vector similarity, scored for political bias, and displayed in a clean web interface with dark mode support. Generate AI summaries on demand, rate individual articles for bias, and read full scraped article text — all from your own server.
 
 ---
 
 ## Tech Stack
 
 - **Backend:** Python, Flask, SQLAlchemy
-- **Database:** PostgreSQL
-- **News Data:** NewsAPI, GNews (adaptable to any provider)
+- **Database:** PostgreSQL with pgvector
+- **News Data:** NewsAPI + GNews (configurable)
 - **LLM:** Any Ollama-compatible model, or adaptable to OpenAI/Anthropic APIs
-- **Containerization:** Docker, Docker Compose
+- **Embeddings:** nomic-embed-text via Ollama
 - **Scraping:** BeautifulSoup, Playwright, readability-lxml, archive.ph fallback
+- **Containerization:** Docker, Docker Compose
 
+---
+
+## Project Structure
+```
+muckscraper/
+├── aggregator/
+│   ├── __init__.py                       # Flask app factory, routes
+│   ├── app.py                            # App entry point
+│   ├── models.py                         # Database models
+│   └── templates/
+│       ├── articles.html                 # Main UI template
+│       └── article.html                  # Full article reader
+├── news_fetcher/
+│   ├── fetch_and_store_articles.py       # Core ingestion logic
+│   ├── scheduler.py                      # 3-hour fetch scheduler
+│   ├── scraper.py                        # Web scraper with fallbacks
+│   ├── story_grouper.py                  # Vector embedding story clustering
+│   ├── topic_classifier.py               # LLM topic classification
+│   ├── summarizer.py                     # Smart Brevity summarization
+│   ├── outlet_bias_llm.py                # Political bias scoring
+│   └── Dockerfile                        # Scheduler container build
+├── docker-compose.yml
+├── Dockerfile                            # App container build
+├── requirements.txt
+├── .env.sample
+├── restart.sh                            # Soft rebuild, keeps DB
+└── README.md
+```
 ---
 
 ## ⚠️ Security Warning
@@ -50,163 +95,108 @@ Authentication is planned for a future release.
 
 ---
 
-## Current Features
-
-### News Fetching
-- 3-hour scheduled fetching across configurable topic categories (defaults: US Headlines, World Headlines, US Politics, Technology, Gaming)
-- Smart restart detection — skips fetch on startup if last fetch was less than 3 hours ago
-- On-demand fetch via the web interface — either by topic or custom search query
-- Dual API sources: NewsAPI and GNews fetched simultaneously for each topic
-- Duplicate article detection to avoid re-storing the same articles
-- Source and title blocklist to filter out unwanted domains and content patterns
-
-### Full Article Scraping
-- BeautifulSoup with Mozilla readability algorithm for smart content extraction
-- Playwright fallback for JavaScript-heavy sites
-- Googlebot user agent fallback for soft-paywalled sites
-- archive.ph fallback for paywalled content
-- Per-article **[scrape]** button for articles missing full text
-- Global **↻ Scrape Missing** button to bulk re-scrape up to 20 articles at a time
-- Full article reader page showing scraped HTML content
-
-### LLM Story Grouping
-- Articles are clustered into stories using a two-step process:
-  - Keyword pre-filter selects top candidate stories
-  - Ollama decides if the article matches an existing story or needs a new one
-- Looks back 7 days when matching articles to existing stories
-- Works across all topics simultaneously
-- Automatic re-grouping when Ollama comes back online after being offline
-
-### Political Bias Scoring
-- Outlet-level bias scoring via LLM on a 1–5 scale:
-  - 1 = Left
-  - 2 = Lean Left
-  - 3 = Center
-  - 4 = Lean Right
-  - 5 = Right
-- Scores assigned automatically when a new outlet is first seen
-- Retry mechanism re-attempts scoring for outlets that couldn't be rated when LLM was offline
-- Manual re-rank button to re-score any outlet on demand
-- Per-article bias rating button to score individual articles separately from their outlet
-
-### LLM Summarization
-- On-demand AI summary generation using Smart Brevity format:
-  - **The big picture** — one punchy sentence
-  - **Why it matters** — 1-2 sentences on significance
-  - **What's happening** — bullet points of key facts
-  - **What's next** — forward-looking statement
-- Summaries use full scraped article text, not just API snippets
-- Re-summarize button to regenerate at any time
-- Auto-summarization of unsummarized stories when Ollama comes back online
-
-### Ollama Catchup
-- Automatic catchup when scheduler detects Ollama came back online:
-  - Re-groups single-article stories using LLM
-  - Retries unrated outlets
-  - Auto-summarizes unsummarized stories (capped at 10 per run)
-- Manual **↻ Ollama Catchup** button in the sidebar
-
-### Web Interface
-- Sticky sidebar with topic links and per-topic refresh buttons
-- Dark/light mode toggle — preference saved in localStorage
-- Color-coded bias tags on every article (blue = left, red = right, grey = center)
-- Separate "Outlet" and "Article" bias labels when an article has been individually rated
-- Smart Brevity AI summary with labeled sections and bullet points
-- Ollama online/offline status indicator
-- Custom topic search bar
-
-### Infrastructure
-- Raw API payload storage with 30-day auto-cleanup
-- Database indexes on key columns for query performance
-- `restart.sh` — soft rebuild that preserves the database
-
----
-
-## Project Structure
-
-```
-muckscraper/
-├── aggregator/
-│   ├── __init__.py          # Flask app factory, all routes
-│   ├── app.py               # App entry point
-│   ├── models.py            # Database models
-│   └── templates/
-│       ├── articles.html    # Main UI template
-│       └── article.html     # Full article reader
-├── news_fetcher/
-│   ├── fetch_and_store_articles.py   # Core ingestion logic
-│   ├── scheduler.py                  # 3-hour fetch scheduler
-│   ├── scraper.py                    # Article scraping (BS4, Playwright, archive.ph)
-│   ├── story_grouper.py              # LLM story clustering
-│   ├── summarizer.py                 # LLM summarization
-│   └── outlet_bias_llm.py            # LLM bias scoring
-├── docker-compose.yml
-├── Dockerfile
-├── news_fetcher/Dockerfile
-├── requirements.txt
-├── restart.sh
-└── README.md
-```
-
----
-
 ## Requirements
 
 - Docker and Docker Compose
-- NewsAPI key — [newsapi.org](https://newsapi.org) (free tier: 100 requests/day)
-- GNews key — [gnews.io](https://gnews.io) (free tier: 100 requests/day)
-- Ollama running on your network with a compatible model
+- NewsAPI key (free tier: 100 requests/day)
+- GNews API key (free tier: 100 requests/day)
+- Ollama running on your network with:
+  - A chat model (e.g. `llama3.1`, `mistral`)
+  - An embedding model (`nomic-embed-text`)
 
 ---
 
-## Setup
+## Installation
+```bash
+git clone https://github.com/grregis/muckscraper.git
+cd muckscraper
+cp .env.sample .env
+# Edit .env with your API keys and Ollama host
+docker compose up --build
+```
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/grregis/muckscraper.git
-   cd muckscraper
-   ```
+Then open `http://localhost:5000` in your browser.
 
-2. Copy the environment template and fill in your values:
-   ```bash
-   cp .env.sample .env
-   ```
+---
 
-3. Generate a secret key:
-   ```bash
-   python3 -c "import secrets; print(secrets.token_hex(32))"
-   ```
+## Current Features
 
-4. Start the containers:
-   ```bash
-   docker compose up --build
-   ```
+### News Fetching
+- Scheduled fetching every 3 hours across 7 topic categories
+- On-demand fetch via the web interface — by topic or custom search query
+- Dual API sources — NewsAPI and GNews fetched for every topic
+- Smart restart timer — skips fetch on startup if last fetch was less than 3 hours ago
+- Duplicate article detection
+- Source and title keyword blocklist
 
-5. Open the app at `http://localhost:5000`
+### Article Scraping
+- Full article text scraped automatically on fetch
+- BeautifulSoup + readability-lxml for content extraction
+- Playwright fallback for JavaScript-heavy sites
+- Googlebot user agent fallback for soft-paywalled sites
+- archive.ph fallback as last resort
+- Per-article [scrape] button and global ↻ Scrape Missing button
+
+### Topic Classification
+- LLM-powered topic classification — articles are classified by content, not by which API fetched them
+- Topics: US Headlines, US Politics, International Headlines, Science/Technology, Gaming, Sports, Business/Finance
+- Articles can belong to multiple topics
+- ↻ Reclassify Topics button to reclassify all articles with updated logic
+
+### Political Bias Scoring
+- Outlet-level bias scoring via LLM on a 1–5 scale (1=Left, 5=Right)
+- Scores assigned automatically when a new outlet is first seen
+- Retry mechanism for outlets that failed while LLM was offline
+- Manual re-rank button to re-score any outlet on demand
+- Per-article bias rating separate from outlet score
+
+### Story Grouping
+- Vector embedding-based story clustering using pgvector and nomic-embed-text
+- Articles matched to existing stories using cosine similarity
+- Automatic re-grouping when Ollama comes back online
+- ⚡ Force Re-group button to rebuild all story groupings from scratch
+
+### LLM Summarization
+- On-demand Smart Brevity summaries: The big picture, Why it matters, What's happening, What's next
+- Auto-summarization when Ollama reconnects
+- Re-summarize button to regenerate at any time
+
+### Web Interface
+- Clean UI with dark/light mode toggle (preference saved in browser)
+- Sticky sidebar with topic navigation
+- Pagination — 25 stories per page
+- Color-coded bias tags (blue = left, red = right, grey = center)
+- Full article reader at `/article/<id>` showing scraped HTML content
+- Ollama online/offline status indicator
+- Sidebar maintenance buttons: Wake Ollama, Ollama Catchup, Scrape Missing, Force Re-group, Reclassify Topics
 
 ---
 
 ## Customization
 
 ### Topics / Categories
-Edit the `TOPICS` list in `aggregator/__init__.py` to add, remove, or change the topics that appear in the sidebar.
+Edit the `TOPICS` list in `aggregator/__init__.py` and the `SCHEDULED_FETCHES` list in `news_fetcher/scheduler.py`.
 
 ### News API Provider
 The fetching logic lives in `news_fetcher/fetch_and_store_articles.py`. Swap out the API client for any provider that returns article titles, URLs, content snippets, and source names.
 
 ### LLM Provider
-LLM calls are isolated in:
+LLM calls are isolated in these files:
 - `news_fetcher/outlet_bias_llm.py` — bias scoring
 - `news_fetcher/summarizer.py` — summarization
-- `news_fetcher/story_grouper.py` — story clustering
-
-All use simple HTTP POST to an Ollama-compatible endpoint. Replace with OpenAI, Anthropic, Groq, etc. by swapping the API call.
+- `news_fetcher/topic_classifier.py` — topic classification
+- `news_fetcher/story_grouper.py` — story matching
 
 ### Blocked Sources
 Add domains or title keywords to `BLOCKED_SOURCES` and `BLOCKED_TITLE_KEYWORDS` in `news_fetcher/fetch_and_store_articles.py`.
 
-### Scraping Strategies
-Configure which domains use Playwright, Googlebot UA, or get skipped entirely via the lists at the top of `news_fetcher/scraper.py`.
+---
+
+## Maintenance Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `./restart.sh` | Soft rebuild — clears cache, rebuilds images, keeps database |
 
 ---
 
@@ -214,41 +204,41 @@ Configure which domains use Playwright, Googlebot UA, or get skipped entirely vi
 
 ### Planned Features
 
-#### Headlines Feature
-- Dedicated `/headlines` page ranking top stories by cross-outlet coverage
-- LLM story clustering using vector similarity (pgvector)
-- Visual bias spectrum per story showing which outlets from left to right covered it
-
-#### Paywall Bypass
-- RSS feed extraction for outlets that publish full text in RSS
-- Per-outlet cookie injection for subscribed sites
-
-#### Admin Interface
-- Manual bias score overrides for outlets
-- Outlet management page (view, edit, delete)
-- Article management (bulk delete, manage blocked sources via UI)
-
-#### Better Filtering & Sorting
-- Filter articles by bias score
-- Sort stories by coverage frequency
-- Date range filtering
-- Pagination
-
 #### Infrastructure
 - User authentication (Flask-Login)
-- Replace `print()` with Python `logging` throughout
-- pgvector embeddings for semantic story clustering
-- Replace Docker `sleep` with proper `wait-for-db`
+- Replace print() with proper logging
+- Production WSGI server support
+- Wake on LAN via pfSense API
+
+#### Story & Coverage Analysis
+- Coverage frequency display per story
+- Visual bias spectrum showing which outlets covered each story
+
+#### Improved Accuracy
+- Topic classification prompt tuning
+- pgvector similarity threshold tuning
+- Periodic outlet re-scoring
+
+#### Paywall Bypass
+- RSS feed extraction for outlets that publish full text in feeds
+
+#### Admin Interface
+- Manual bias score overrides
+- Outlet management (view, edit, delete)
+- Blocked sources management via UI
+
+#### UI
+- Responsive mobile layout
 
 ---
 
-## Known Limitations
+## ⚠️ Known Limitations
 
 - Development server only — not production hardened
 - No authentication — see Security Warning above
-- NYT, Washington Post, and hard-paywalled sites are difficult to fully scrape
-- Story clustering quality depends on Ollama model and availability
-- No pagination beyond 50 stories per topic view
+- Hard-paywalled sites (NYT, Washington Post) cannot be fully scraped
+- Topic classification accuracy depends on LLM quality
+- Story clustering quality depends on Ollama being online during fetches
 
 ---
 

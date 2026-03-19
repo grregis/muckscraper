@@ -4,6 +4,41 @@ All notable changes to MuckScraper are documented here.
 
 ---
 
+## [0.2.0] - 2026-03-19
+
+### Added
+- **pgvector story clustering** — replaced Ollama prompt-based grouping with vector embeddings using `nomic-embed-text`. Articles are now matched to stories using cosine similarity for faster, more accurate grouping that works across topics
+- **LLM topic classifier** — articles are now classified into topics by Ollama based on content, replacing the old API-fetch-based tagging. Topics: US Headlines, US Politics, International Headlines, Science/Technology, Gaming, Sports, Business/Finance, Other
+- **Pagination** — 25 stories per page with prev/next navigation
+- **Force Re-group button** — rebuilds all story groupings from scratch using vector similarity
+- **Reclassify Topics button** — reclassifies all existing articles into the new topic system
+- **Wake Ollama button** — sends Wake on LAN magic packet to Ollama machine
+- **Per-article [scrape] button** — appears on articles missing full text
+- **Global ↻ Scrape Missing button** — bulk re-scrapes up to 20 articles missing full text
+- `python-readability` for smarter article content extraction
+- Googlebot user agent fallback for soft-paywalled sites
+- archive.ph fallback when all other scraping strategies fail
+- DB indexes on articles and stories tables for faster queries
+- Raw API payload storage with 30-day auto-cleanup
+- `restart.sh` script for soft rebuilds that preserve the database
+- Screenshots added to README
+
+### Changed
+- Topics redesigned — now 7 categories classified by LLM content analysis rather than API fetch category
+- Scheduler fetch configurations updated to better target relevant content
+- TOPICS list in `__init__.py` simplified — fetch config moved entirely to scheduler
+
+### Fixed
+- Ollama catchup button breaking article links and summarization
+- Re-grouping creating new stories instead of only matching existing ones
+- Auto-summarization capped to 10 stories per batch to prevent timeouts
+- HTML tags being sent to Ollama in summaries
+- Content snippet size increased from 500 to 1500 chars per article
+- Force regroup foreign key violation on story_topics table
+- numpy array boolean evaluation error in story grouper
+
+---
+
 ## [0.1.3] - 2026-03-17
 
 ### Added

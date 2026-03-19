@@ -19,7 +19,7 @@ FETCH_INTERVAL_HOURS = 3
 
 SCHEDULED_FETCHES = [
     {
-        "label":          "US Headlines",
+        "label":          "US and World News",
         "mode":           "top",
         "country":        "us",
         "category":       None,
@@ -28,7 +28,7 @@ SCHEDULED_FETCHES = [
         "gnews_category": "general",
     },
     {
-        "label":          "World Headlines",
+        "label":          "World News",
         "mode":           "top",
         "country":        None,
         "category":       None,
@@ -41,8 +41,8 @@ SCHEDULED_FETCHES = [
         "mode":           "query",
         "country":        None,
         "category":       None,
-        "query":          "US politics congress white house",
-        "gnews_query":    "US politics",
+        "query":          "US politics congress white house senate trump",
+        "gnews_query":    "US politics congress",
         "gnews_category": None,
     },
     {
@@ -55,16 +55,33 @@ SCHEDULED_FETCHES = [
         "gnews_category": "technology",
     },
     {
-        "label":          "Gaming",
-        "mode":           "top",
-        "country":        "us",
-        "category":       "entertainment",
-        "query":          None,
-        "gnews_query":    "gaming video games",
+        "label":          "Entertainment and Gaming",
+        "mode":           "query",
+        "country":        None,
+        "category":       None,
+        "query":          "video games gaming PlayStation Xbox Nintendo Steam esports",
+        "gnews_query":    "video games gaming",
         "gnews_category": None,
     },
+    {
+        "label":          "Sports",
+        "mode":           "top",
+        "country":        "us",
+        "category":       "sports",
+        "query":          None,
+        "gnews_query":    None,
+        "gnews_category": "sports",
+    },
+    {
+        "label":          "Business",
+        "mode":           "top",
+        "country":        "us",
+        "category":       "business",
+        "query":          None,
+        "gnews_query":    None,
+        "gnews_category": "business",
+    },
 ]
-
 app = create_app()
 
 

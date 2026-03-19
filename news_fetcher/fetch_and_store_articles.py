@@ -10,8 +10,9 @@ from datetime import datetime
 import requests
 import os
 import json
-from news_fetcher.story_grouper import find_or_create_story
+from news_fetcher.story_grouper import find_or_create_story, get_embedding
 from datetime import datetime, timedelta
+from news_fetcher.topic_classifier import classify_article
 
 app = create_app()
 
@@ -99,7 +100,6 @@ def store_articles(articles_data, topic_name):
     articles_data: list of dicts with keys:
         title, content, url, source_name, published_at
     """
-    topic = get_or_create_topic(topic_name)
     stored = 0
 
     # Pre-fetch recent stories once for the whole batch
@@ -147,15 +147,27 @@ def store_articles(articles_data, topic_name):
             db.session.add(outlet)
             db.session.flush()
 
-        story = find_or_create_story(title, db, Story, recent_stories)
+        # Generate embedding for this article
+        article_embedding = get_embedding(title)
+        story = find_or_create_story(title, db, Story, recent_stories,
+                                     article_embedding=article_embedding)
 
         # Add new story to recent_stories so subsequent articles
         # in this same batch can match against it
         if story not in recent_stories:
             recent_stories.append(story)
 
-        if topic not in story.topics:
-            story.topics.append(topic)
+        # Classify article into topics via Ollama
+        from aggregator.models import Topic as TopicModel
+        classified_topic_names = classify_article(title, content)
+        for topic_name in classified_topic_names:
+            classified_topic = TopicModel.query.filter_by(name=topic_name).first()
+            if not classified_topic:
+                classified_topic = TopicModel(name=topic_name)
+                db.session.add(classified_topic)
+                db.session.flush()
+            if classified_topic not in story.topics:
+                story.topics.append(classified_topic)
 
         scraped_content = scrape_article(url)
         final_content = scraped_content if scraped_content else content
@@ -168,10 +180,14 @@ def store_articles(articles_data, topic_name):
             story_id=story.id,
             url=url,
             date=published_at,
-            bias_score=outlet.bias_score
+            bias_score=outlet.bias_score,
+            embedding=article_embedding
         )
-        new_article.topics.append(topic)
         db.session.add(new_article)
+        # Tag article with same topics as story
+        for t in story.topics:
+            if t not in new_article.topics:
+                new_article.topics.append(t)
         stored += 1
 
     db.session.commit()
@@ -413,12 +429,148 @@ def retry_unsummarized_stories(batch_size=10):
     print("Finished summarization batch.")
 
 
+def generate_missing_embeddings(batch_size=50):
+    """Generate embeddings for articles that don't have one yet."""
+    from news_fetcher.story_grouper import get_embedding
+
+    missing = Article.query.filter(Article.embedding == None).limit(batch_size).all()
+
+    if not missing:
+        print("All articles have embeddings.")
+        return
+
+    print(f"Generating embeddings for {len(missing)} articles...")
+    count = 0
+    for article in missing:
+        embedding = get_embedding(article.title)
+        if embedding:
+            article.embedding = embedding
+            count += 1
+
+    db.session.commit()
+    print(f"Generated {count} embeddings.")
+
+
+def force_regroup_all():
+    """
+    Force re-group ALL articles using vector similarity embeddings.
+    Generates missing embeddings first, then re-assigns every article
+    to the best matching story.
+    """
+    from news_fetcher.story_grouper import get_embedding, find_matching_story
+
+    if not check_ollama_status():
+        print("Ollama offline, skipping force re-group.")
+        return
+
+    print("=== Force re-group starting ===")
+
+    # Step 1: Generate embeddings for any articles missing them
+    missing = Article.query.filter(Article.embedding == None).all()
+    if missing:
+        print(f"Generating embeddings for {len(missing)} articles first...")
+        for article in missing:
+            embedding = get_embedding(article.title)
+            if embedding:
+                article.embedding = embedding
+        db.session.commit()
+        print("Embeddings generated.")
+
+    # Step 2: Get all articles with embeddings
+    all_articles = Article.query.filter(Article.embedding != None).all()
+    print(f"Re-grouping {len(all_articles)} articles...")
+
+    # Step 3: Delete all existing stories and re-create from scratch
+    # First detach all articles from stories
+    for article in all_articles:
+        article.story_id = None
+    db.session.flush()
+
+    # Clear junction tables first to avoid foreign key violations
+    db.session.execute(db.text("DELETE FROM story_topics"))
+    db.session.execute(db.text("DELETE FROM article_topics"))
+    db.session.flush()
+
+    # Delete all stories
+    Story.query.delete()
+    db.session.flush()
+
+    # Step 4: Re-group articles one by one
+    new_stories = []
+    for article in all_articles:
+        matched = find_matching_story(
+            article.title, article.embedding, new_stories
+        )
+
+        if matched:
+            article.story_id = matched.id
+            if matched not in new_stories:
+                new_stories.append(matched)
+        else:
+            from news_fetcher.story_grouper import clean_story_title
+            new_title = clean_story_title(article.title)
+            story = Story(title=new_title, summary=None)
+            db.session.add(story)
+            db.session.flush()
+            article.story_id = story.id
+            new_stories.append(story)
+
+    db.session.commit()
+    print(f"=== Force re-group complete. Created {len(new_stories)} stories. ===")
+
+
+def reclassify_all_articles(batch_size=50):
+    """
+    Reclassify all existing articles into the new topic system using Ollama.
+    Clears existing topic tags and reassigns based on content.
+    """
+    from news_fetcher.topic_classifier import classify_article
+    from aggregator.models import Topic as TopicModel
+
+    if not check_ollama_status():
+        print("Ollama offline, skipping reclassification.")
+        return
+
+    # Clear all existing topic assignments
+    db.session.execute(db.text("DELETE FROM article_topics"))
+    db.session.execute(db.text("DELETE FROM story_topics"))
+    db.session.flush()
+    print("Cleared existing topic assignments.")
+
+    all_articles = Article.query.all()
+    total = len(all_articles)
+    print(f"Reclassifying {total} articles...")
+
+    for i, article in enumerate(all_articles):
+        topic_names = classify_article(article.title, article.content or "")
+
+        for topic_name in topic_names:
+            topic = TopicModel.query.filter_by(name=topic_name).first()
+            if not topic:
+                topic = TopicModel(name=topic_name)
+                db.session.add(topic)
+                db.session.flush()
+            if topic not in article.topics:
+                article.topics.append(topic)
+            if article.story and topic not in article.story.topics:
+                article.story.topics.append(topic)
+
+        # Commit in batches
+        if (i + 1) % batch_size == 0:
+            db.session.commit()
+            print(f"  Progress: {i + 1}/{total}")
+
+    db.session.commit()
+    print(f"Reclassification complete. Processed {total} articles.")
+
+
 def ollama_catchup():
     """
     Run all Ollama-dependent tasks that may have been skipped
     while Ollama was offline.
     """
     print("=== Ollama catchup starting ===")
+    generate_missing_embeddings(batch_size=50)
     regroup_ungrouped_stories()
     retry_unrated_outlets()
     retry_unsummarized_stories(batch_size=10)

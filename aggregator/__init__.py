@@ -7,11 +7,14 @@ import requests
 db = SQLAlchemy()
 
 TOPICS = [
-    {"label": "US Headlines",    "mode": "top",   "query": None,                               "country": "us",  "category": None,         "gnews_query": None,           "gnews_category": "general"},
-    {"label": "World Headlines", "mode": "top",   "query": None,                               "country": None,  "category": None,         "gnews_query": None,           "gnews_category": "world"},
-    {"label": "US Politics",     "mode": "query", "query": "US politics congress white house", "country": None,  "category": None,         "gnews_query": "US politics",  "gnews_category": None},
-    {"label": "Technology",      "mode": "top",   "query": None,                               "country": "us",  "category": "technology", "gnews_query": None,           "gnews_category": "technology"},
-    {"label": "Gaming",          "mode": "top",   "query": None,                               "country": "us",  "category": "entertainment", "gnews_query": "gaming video games", "gnews_category": None},
+    {"label": "US Headlines"},
+    {"label": "US Politics"},
+    {"label": "International Headlines"},
+    {"label": "Science/Technology"},
+    {"label": "Gaming"},
+    {"label": "Sports"},
+    {"label": "Business/Finance"},
+    {"label": "Other"},
 ]
 
 
@@ -33,28 +36,37 @@ def create_app():
     @app.route("/articles")
     def list_articles():
         active_label = request.args.get("topic", None)
+        page = request.args.get("page", 1, type=int)
+        per_page = 25
 
         if active_label:
-            # Filter stories that are tagged with this topic
             topic = Topic.query.filter_by(name=active_label).first()
             if topic:
-                stories = (
+                pagination = (
                     Story.query
                     .filter(Story.topics.contains(topic))
                     .order_by(Story.created_at.desc())
-                    .limit(50)
-                    .all()
+                    .paginate(page=page, per_page=per_page, error_out=False)
                 )
             else:
-                stories = []
+                pagination = None
         else:
-            stories = Story.query.order_by(Story.created_at.desc()).limit(50).all()
+            pagination = (
+                Story.query
+                .order_by(Story.created_at.desc())
+                .paginate(page=page, per_page=per_page, error_out=False)
+            )
+
+        stories = pagination.items if pagination else []
+        total_pages = pagination.pages if pagination else 0
 
         return render_template(
             "articles.html",
             stories=stories,
             topics=TOPICS,
-            active_label=active_label
+            active_label=active_label,
+            page=page,
+            total_pages=total_pages,
         )
 
     @app.route("/fetch", methods=["POST"])
@@ -245,6 +257,50 @@ def create_app():
         if label:
             return redirect(url_for("list_articles", topic=label))
         return redirect(url_for("list_articles"))
+
+    @app.route("/force-regroup", methods=["POST"])
+    def force_regroup():
+        label = request.form.get("label", "")
+        try:
+            print("[Force Regroup] Starting...")
+            from news_fetcher.fetch_and_store_articles import force_regroup_all
+            print("[Force Regroup] Imported successfully")
+            force_regroup_all()
+            print("[Force Regroup] Done!")
+        except Exception as e:
+            import traceback
+            print(f"Force regroup error: {e}")
+            traceback.print_exc()
+        return redirect(f"/articles?topic={label}" if label else "/articles")
+
+    @app.route("/wake-ollama", methods=["POST"])
+    def wake_ollama():
+        label = request.form.get("label", "")
+        try:
+            import wakeonlan
+            mac = os.environ.get("OLLAMA_MAC", "")
+            if mac:
+                wakeonlan.send_magic_packet(mac)
+                print(f"[WoL] Magic packet sent to {mac}")
+            else:
+                print("[WoL] No MAC address configured")
+        except Exception as e:
+            print(f"[WoL] Error: {e}")
+        return redirect(f"/articles?topic={label}" if label else "/articles")
+    
+    @app.route("/reclassify-articles", methods=["POST"])
+    def reclassify_articles():
+        label = request.form.get("label", "")
+        try:
+            print("[Reclassify] Starting...")
+            from news_fetcher.fetch_and_store_articles import reclassify_all_articles
+            reclassify_all_articles()
+            print("[Reclassify] Done!")
+        except Exception as e:
+            import traceback
+            print(f"Reclassify error: {e}")
+            traceback.print_exc()
+        return redirect(f"/articles?topic={label}" if label else "/articles")
         
     return app
 

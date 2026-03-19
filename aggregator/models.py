@@ -2,6 +2,7 @@
 
 from . import db
 from datetime import datetime
+from pgvector.sqlalchemy import Vector
 
 # Many-to-many junction tables
 story_topics = db.Table("story_topics",
@@ -71,6 +72,7 @@ class Article(db.Model):
     story_id   = db.Column(db.Integer, db.ForeignKey("stories.id"))
     date       = db.Column(db.DateTime, default=datetime.utcnow)
     bias_score = db.Column(db.Float)
+    embedding  = db.Column(Vector(768))
 
     topics = db.relationship("Topic", secondary=article_topics, back_populates="articles")
 

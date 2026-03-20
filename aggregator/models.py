@@ -46,6 +46,7 @@ class Story(db.Model):
 
     id         = db.Column(db.Integer, primary_key=True)
     title      = db.Column(db.String, nullable=False)
+    headline   = db.Column(db.String)
     summary    = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 

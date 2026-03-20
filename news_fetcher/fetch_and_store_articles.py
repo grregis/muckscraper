@@ -13,6 +13,10 @@ import json
 from news_fetcher.story_grouper import find_or_create_story, get_embedding
 from datetime import datetime, timedelta
 from news_fetcher.topic_classifier import classify_article
+from news_fetcher.headline_generator import generate_story_headline, generate_missing_headlines
+import logging
+
+logger = logging.getLogger(__name__)
 
 app = create_app()
 
@@ -57,25 +61,25 @@ def retry_unrated_outlets():
     unrated = Outlet.query.filter_by(bias_score=None).all()
 
     if not unrated:
-        print("No unrated outlets to retry.")
+        logger.info("No unrated outlets to retry.")
         return
 
-    print(f"Found {len(unrated)} unrated outlets, retrying Ollama...")
+    logger.info(f"Found {len(unrated)} unrated outlets, retrying Ollama...")
 
     for outlet in unrated:
-        print(f"  Retrying bias score for: {outlet.name}")
+        logger.info(f"  Retrying bias score for: {outlet.name}")
         bias_score = get_outlet_bias_from_llm(outlet.name)
 
         if bias_score is not None:
-            print(f"  Got score {bias_score} for {outlet.name}, updating...")
+            logger.info(f"  Got score {bias_score} for {outlet.name}, updating...")
             outlet.bias_score = bias_score
             for article in outlet.articles:
                 article.bias_score = bias_score
         else:
-            print(f"  Still couldn't rate {outlet.name}, will try again next fetch.")
+            logger.warning(f"  Still couldn't rate {outlet.name}, will try again next fetch.")
 
     db.session.commit()
-    print("Finished retrying unrated outlets.")
+    logger.info("Finished retrying unrated outlets.")
 
 
 def get_or_create_topic(topic_name):
@@ -105,7 +109,7 @@ def store_articles(articles_data, topic_name):
     # Pre-fetch recent stories once for the whole batch
     cutoff = datetime.utcnow() - timedelta(days=7)
     recent_stories = Story.query.filter(Story.created_at >= cutoff).all()
-    print(f"  [Grouper] Loaded {len(recent_stories)} recent stories for matching")
+    logger.info(f"  [Grouper] Loaded {len(recent_stories)} recent stories for matching")
 
     for article in articles_data:
         title        = article.get("title")
@@ -118,25 +122,25 @@ def store_articles(articles_data, topic_name):
             continue
 
         if any(blocked in url.lower() for blocked in BLOCKED_SOURCES):
-            print(f"Skipping blocked source: {url}")
+            logger.debug(f"Skipping blocked source: {url}")
             continue
 
         if any(kw in title.lower() for kw in BLOCKED_TITLE_KEYWORDS):
-            print(f"Skipping blocked title: {title}")
+            logger.debug(f"Skipping blocked title: {title}")
             continue
 
         existing = Article.query.filter_by(url=url).first()
         if existing:
-            if topic not in existing.topics:
-                existing.topics.append(topic)
-            print(f"Skipping duplicate: {title}")
+            logger.debug(f"Skipping duplicate: {title}")
+            continue
+            logger.debug(f"Skipping duplicate: {title}")
             continue
 
-        print(f"Processing: {title}")
+        logger.info(f"Processing: {title}")
 
         outlet = Outlet.query.filter_by(name=source_name).first()
         if not outlet:
-            print(f"  New outlet found: {source_name}, asking Ollama for bias score...")
+            logger.info(f"  New outlet found: {source_name}, asking Ollama for bias score...")
             bias_score = get_outlet_bias_from_llm(source_name)
             outlet = Outlet(
                 name=source_name,
@@ -160,10 +164,10 @@ def store_articles(articles_data, topic_name):
         # Classify article into topics via Ollama
         from aggregator.models import Topic as TopicModel
         classified_topic_names = classify_article(title, content)
-        for topic_name in classified_topic_names:
-            classified_topic = TopicModel.query.filter_by(name=topic_name).first()
+        for classified_name in classified_topic_names:
+            classified_topic = TopicModel.query.filter_by(name=classified_name).first()
             if not classified_topic:
-                classified_topic = TopicModel(name=topic_name)
+                classified_topic = TopicModel(name=classified_name)
                 db.session.add(classified_topic)
                 db.session.flush()
             if classified_topic not in story.topics:
@@ -183,29 +187,37 @@ def store_articles(articles_data, topic_name):
             bias_score=outlet.bias_score,
             embedding=article_embedding
         )
-        db.session.add(new_article)
         # Tag article with same topics as story
         for t in story.topics:
             if t not in new_article.topics:
                 new_article.topics.append(t)
+
+        # Generate headline if this is the second article in the story
+        if len(story.articles) == 1:
+            db.session.flush()
+            if len(story.articles) >= 2:
+                headline = generate_story_headline(story)
+                if headline:
+                    story.headline = headline
+                    
         stored += 1
 
     db.session.commit()
-    print(f"Stored {stored} new articles for topic: {topic_name}")
+    logger.info(f"Stored {stored} new articles for topic: {topic_name}")
 
 
 def fetch_newsapi(topic_name, mode="top", query=None, country="us", category=None):
     """Fetch articles from NewsAPI and store them."""
     api_key = os.environ.get("NEWS_API_KEY", "")
     if not api_key:
-        print("NEWS_API_KEY not set, skipping NewsAPI fetch.")
+        logger.warning("NEWS_API_KEY not set, skipping NewsAPI fetch.")
         return
 
     newsapi = NewsApiClient(api_key=api_key)
 
     try:
         if mode == "query" and query:
-            print(f"[NewsAPI] Fetching query: {query}")
+            logger.info(f"[NewsAPI] Fetching query: {query}")
             results = newsapi.get_everything(
                 q=query,
                 language="en",
@@ -215,7 +227,7 @@ def fetch_newsapi(topic_name, mode="top", query=None, country="us", category=Non
         else:
             label = f"country={country}" if country else ""
             label += f" category={category}" if category else ""
-            print(f"[NewsAPI] Fetching top headlines ({label.strip()})")
+            logger.info(f"[NewsAPI] Fetching top headlines ({label.strip()})")
             kwargs = {"page_size": 100}
             if country:
                 kwargs["country"] = country
@@ -224,7 +236,7 @@ def fetch_newsapi(topic_name, mode="top", query=None, country="us", category=Non
             results = newsapi.get_top_headlines(**kwargs)
 
         raw_articles = results.get("articles", [])
-        print(f"[NewsAPI] Fetched {len(raw_articles)} articles")
+        logger.info(f"[NewsAPI] Fetched {len(raw_articles)} articles")
 
         normalized = []
         for a in raw_articles:
@@ -257,19 +269,19 @@ def fetch_newsapi(topic_name, mode="top", query=None, country="us", category=Non
         db.session.commit()
 
     except Exception as e:
-        print(f"[NewsAPI] Error fetching {topic_name}: {e}")
+        logger.error(f"[NewsAPI] Error fetching {topic_name}: {e}")
 
 
 def fetch_gnews(topic_name, query=None, category=None):
     """Fetch articles from GNews API and store them."""
     api_key = os.environ.get("GNEWS_API_KEY", "")
     if not api_key:
-        print("GNEWS_API_KEY not set, skipping GNews fetch.")
+        logger.warning("GNEWS_API_KEY not set, skipping GNews fetch.")
         return
 
     try:
         if query:
-            print(f"[GNews] Fetching query: {query}")
+            logger.info(f"[GNews] Fetching query: {query}")
             url = "https://gnews.io/api/v4/search"
             params = {
                 "q":      query,
@@ -278,7 +290,7 @@ def fetch_gnews(topic_name, query=None, category=None):
                 "apikey": api_key,
             }
         elif category:
-            print(f"[GNews] Fetching category: {category}")
+            logger.info(f"[GNews] Fetching category: {category}")
             url = "https://gnews.io/api/v4/top-headlines"
             params = {
                 "category": category,
@@ -288,7 +300,7 @@ def fetch_gnews(topic_name, query=None, category=None):
                 "apikey":   api_key,
             }
         else:
-            print(f"[GNews] Fetching top headlines")
+            logger.info(f"[GNews] Fetching top headlines")
             url = "https://gnews.io/api/v4/top-headlines"
             params = {
                 "lang":    "en",
@@ -302,7 +314,7 @@ def fetch_gnews(topic_name, query=None, category=None):
         data = response.json()
 
         raw_articles = data.get("articles", [])
-        print(f"[GNews] Fetched {len(raw_articles)} articles")
+        logger.info(f"[GNews] Fetched {len(raw_articles)} articles")
 
         normalized = []
         for a in raw_articles:
@@ -336,7 +348,7 @@ def fetch_gnews(topic_name, query=None, category=None):
         db.session.commit()
 
     except Exception as e:
-        print(f"[GNews] Error fetching {topic_name}: {e}")
+        logger.error(f"[GNews] Error fetching {topic_name}: {e}")
     
 
 def regroup_ungrouped_stories():
@@ -347,7 +359,7 @@ def regroup_ungrouped_stories():
     from news_fetcher.story_grouper import get_candidate_stories, ask_ollama_for_match
 
     if not check_ollama_status():
-        print("Ollama offline, skipping re-grouping.")
+        logger.info("Ollama offline, skipping re-grouping.")
         return
 
     cutoff = datetime.utcnow() - timedelta(days=7)
@@ -356,10 +368,10 @@ def regroup_ungrouped_stories():
     ungrouped = [s for s in ungrouped if len(s.articles) == 1]
 
     if not ungrouped:
-        print("No ungrouped stories to re-group.")
+        logger.info("No ungrouped stories to re-group.")
         return
 
-    print(f"Found {len(ungrouped)} single-article stories to re-group...")
+    logger.info(f"Found {len(ungrouped)} single-article stories to re-group...")
 
     all_recent = Story.query.filter(Story.created_at >= cutoff).all()
     multi_article_stories = [s for s in all_recent if len(s.articles) > 1]
@@ -379,7 +391,7 @@ def regroup_ungrouped_stories():
         matched = ask_ollama_for_match(article.title, candidates)
 
         if matched and matched.id != story.id:
-            print(f"  Re-grouped '{story.title}' → '{matched.title}'")
+            logger.info(f"  Re-grouped '{story.title}' → '{matched.title}'")
 
             # Move article to matched story
             article.story_id = matched.id
@@ -398,13 +410,13 @@ def regroup_ungrouped_stories():
                 multi_article_stories.append(matched)
 
     db.session.commit()
-    print(f"Re-grouping complete. Merged {merged} stories.")
+    logger.info(f"Re-grouping complete. Merged {merged} stories.")
 
 
 def retry_unsummarized_stories(batch_size=10):
     """Find stories without summaries and generate them — capped at batch_size."""
     if not check_ollama_status():
-        print("Ollama offline, skipping auto-summarization.")
+        logger.info("Ollama offline, skipping auto-summarization.")
         return
 
     unsummarized = Story.query.filter(
@@ -413,20 +425,20 @@ def retry_unsummarized_stories(batch_size=10):
     ).limit(batch_size).all()
 
     if not unsummarized:
-        print("All stories have summaries.")
+        logger.info("All stories have summaries.")
         return
 
-    print(f"Summarizing up to {batch_size} stories...")
+    logger.info(f"Summarizing up to {batch_size} stories...")
     for story in unsummarized:
         if not story.articles:
             continue
         summary = summarize_story(story)
         if summary:
             story.summary = summary
-            print(f"  Summarized: {story.title[:60]}")
+            logger.info(f"  Summarized: {story.title[:60]}")
 
     db.session.commit()
-    print("Finished summarization batch.")
+    logger.info("Finished summarization batch.")
 
 
 def generate_missing_embeddings(batch_size=50):
@@ -436,10 +448,10 @@ def generate_missing_embeddings(batch_size=50):
     missing = Article.query.filter(Article.embedding == None).limit(batch_size).all()
 
     if not missing:
-        print("All articles have embeddings.")
+        logger.info("All articles have embeddings.")
         return
 
-    print(f"Generating embeddings for {len(missing)} articles...")
+    logger.info(f"Generating embeddings for {len(missing)} articles...")
     count = 0
     for article in missing:
         embedding = get_embedding(article.title)
@@ -448,7 +460,7 @@ def generate_missing_embeddings(batch_size=50):
             count += 1
 
     db.session.commit()
-    print(f"Generated {count} embeddings.")
+    logger.info(f"Generated {count} embeddings.")
 
 
 def force_regroup_all():
@@ -460,25 +472,25 @@ def force_regroup_all():
     from news_fetcher.story_grouper import get_embedding, find_matching_story
 
     if not check_ollama_status():
-        print("Ollama offline, skipping force re-group.")
+        logger.info("Ollama offline, skipping force re-group.")
         return
 
-    print("=== Force re-group starting ===")
+    logger.info("=== Force re-group starting ===")
 
     # Step 1: Generate embeddings for any articles missing them
     missing = Article.query.filter(Article.embedding == None).all()
     if missing:
-        print(f"Generating embeddings for {len(missing)} articles first...")
+        logger.info(f"Generating embeddings for {len(missing)} articles first...")
         for article in missing:
             embedding = get_embedding(article.title)
             if embedding:
                 article.embedding = embedding
         db.session.commit()
-        print("Embeddings generated.")
+        logger.info("Embeddings generated.")
 
     # Step 2: Get all articles with embeddings
     all_articles = Article.query.filter(Article.embedding != None).all()
-    print(f"Re-grouping {len(all_articles)} articles...")
+    logger.info(f"Re-grouping {len(all_articles)} articles...")
 
     # Step 3: Delete all existing stories and re-create from scratch
     # First detach all articles from stories
@@ -495,19 +507,23 @@ def force_regroup_all():
     Story.query.delete()
     db.session.flush()
 
-    # Step 4: Re-group articles one by one
+    # Step 4: Re-group articles one by one and re-attach topics
+    from news_fetcher.story_grouper import clean_story_title
+    from news_fetcher.topic_classifier import classify_article
+    from aggregator.models import Topic as TopicModel
+
     new_stories = []
-    for article in all_articles:
+    for i, article in enumerate(all_articles):
         matched = find_matching_story(
             article.title, article.embedding, new_stories
         )
 
         if matched:
-            article.story_id = matched.id
-            if matched not in new_stories:
-                new_stories.append(matched)
+            story = matched
+            article.story_id = story.id
+            if story not in new_stories:
+                new_stories.append(story)
         else:
-            from news_fetcher.story_grouper import clean_story_title
             new_title = clean_story_title(article.title)
             story = Story(title=new_title, summary=None)
             db.session.add(story)
@@ -515,8 +531,26 @@ def force_regroup_all():
             article.story_id = story.id
             new_stories.append(story)
 
+        # Re-attach topic tags
+        topic_names = classify_article(article.title, article.content or "")
+        for topic_name in topic_names:
+            topic = TopicModel.query.filter_by(name=topic_name).first()
+            if not topic:
+                topic = TopicModel(name=topic_name)
+                db.session.add(topic)
+                db.session.flush()
+            if topic not in article.topics:
+                article.topics.append(topic)
+            if topic not in story.topics:
+                story.topics.append(topic)
+
+        # Commit in batches of 50
+        if (i + 1) % 50 == 0:
+            db.session.commit()
+            logger.info(f"  Progress: {i + 1}/{len(all_articles)}")
+
     db.session.commit()
-    print(f"=== Force re-group complete. Created {len(new_stories)} stories. ===")
+    logger.info(f"=== Force re-group complete. Created {len(new_stories)} stories. ===")
 
 
 def reclassify_all_articles(batch_size=50):
@@ -528,18 +562,18 @@ def reclassify_all_articles(batch_size=50):
     from aggregator.models import Topic as TopicModel
 
     if not check_ollama_status():
-        print("Ollama offline, skipping reclassification.")
+        logger.info("Ollama offline, skipping reclassification.")
         return
 
     # Clear all existing topic assignments
     db.session.execute(db.text("DELETE FROM article_topics"))
     db.session.execute(db.text("DELETE FROM story_topics"))
     db.session.flush()
-    print("Cleared existing topic assignments.")
+    logger.info("Cleared existing topic assignments.")
 
     all_articles = Article.query.all()
     total = len(all_articles)
-    print(f"Reclassifying {total} articles...")
+    logger.info(f"Reclassifying {total} articles...")
 
     for i, article in enumerate(all_articles):
         topic_names = classify_article(article.title, article.content or "")
@@ -558,10 +592,10 @@ def reclassify_all_articles(batch_size=50):
         # Commit in batches
         if (i + 1) % batch_size == 0:
             db.session.commit()
-            print(f"  Progress: {i + 1}/{total}")
+            logger.info(f"  Progress: {i + 1}/{total}")
 
     db.session.commit()
-    print(f"Reclassification complete. Processed {total} articles.")
+    logger.info(f"Reclassification complete. Processed {total} articles.")
 
 
 def ollama_catchup():
@@ -569,12 +603,13 @@ def ollama_catchup():
     Run all Ollama-dependent tasks that may have been skipped
     while Ollama was offline.
     """
-    print("=== Ollama catchup starting ===")
+    logger.info("=== Ollama catchup starting ===")
     generate_missing_embeddings(batch_size=50)
+    generate_missing_headlines()
     regroup_ungrouped_stories()
     retry_unrated_outlets()
     retry_unsummarized_stories(batch_size=10)
-    print("=== Ollama catchup complete ===")
+    logger.info("=== Ollama catchup complete ===")
 
 
 def cleanup_old_payloads():
@@ -583,13 +618,13 @@ def cleanup_old_payloads():
     cutoff = datetime.utcnow() - timedelta(days=30)
     old = RawArticlePayload.query.filter(RawArticlePayload.fetched_at < cutoff).all()
     if old:
-        print(f"Deleting {len(old)} raw payloads older than 30 days...")
+        logger.info(f"Deleting {len(old)} raw payloads older than 30 days...")
         for payload in old:
             db.session.delete(payload)
         db.session.commit()
-        print("Cleanup complete.")
+        logger.info("Cleanup complete.")
     else:
-        print("No old payloads to clean up.")
+        logger.info("No old payloads to clean up.")
 
 
 def fetch_and_store_articles(topic_name, mode="top", query=None,

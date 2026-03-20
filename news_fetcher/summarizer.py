@@ -3,6 +3,9 @@
 import requests
 import os
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "")
 MODEL = os.environ.get("OLLAMA_MODEL", "mannix/llama3.1-8b-lexi:latest")
@@ -97,10 +100,10 @@ Detailed Summary:"""
         summary = result.get("response", "").strip()
 
         if summary:
-            print(f"  Generated summary for story: {story.title[:60]}...")
+            logger.info(f"  Generated summary for story: {story.title[:60]}...")
             return summary
         return None
 
     except Exception as e:
-        print(f"  Error generating summary for '{story.title}': {e}")
+        logger.info(f"  Error generating summary for '{story.title}': {e}")
         return None

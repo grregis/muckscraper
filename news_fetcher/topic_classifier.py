@@ -2,6 +2,9 @@
 
 import requests
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "")
 MODEL       = os.environ.get("OLLAMA_MODEL", "")
@@ -75,12 +78,12 @@ Rules:
                         matched.append(valid)
 
         if matched:
-            print(f"  [Classifier] Tagged as: {', '.join(matched)}")
+            logger.info(f"  [Classifier] Tagged as: {', '.join(matched)}")
             return matched
 
-        print(f"  [Classifier] No match in response '{result}', using Other")
+        logger.info(f"  [Classifier] No match in response '{result}', using Other")
         return ["Other"]
 
     except Exception as e:
-        print(f"  [Classifier] Error: {e}, using Other")
+        logger.info(f"  [Classifier] Error: {e}, using Other")
         return ["Other"]

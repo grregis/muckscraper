@@ -467,14 +467,26 @@
             <input type="text" name="query" placeholder="Search a topic e.g. climate, AI ...">
             <button type="submit">Fetch Articles</button>
         </form>
-        <p class="hint">Type a topic and click Fetch, or use the sidebar links</p>
+        <<p class="hint">Type a topic and click Fetch, or use the sidebar links</p>
+
+        <div style="margin-bottom: 16px; display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 13px; color: var(--text-muted);">Show single-article stories:</span>
+            <a href="?{% if active_label %}topic={{ active_label | urlencode }}&{% endif %}show_single={{ 'false' if show_single else 'true' }}&page=1"
+               style="font-size: 13px; color: var(--accent); text-decoration: none;">
+                {{ '✓ On' if show_single else '✗ Off' }}
+            </a>
+        </div>
 
         {% if stories %}
             {% for story in stories %}
+            {% if show_single or story.articles|length > 1 %}
             <div class="story">
 
                 <div class="story-header">
-                    <h2>{{ story.title }}</h2>
+                    <h2>{{ story.headline if story.headline else story.title }}</h2>
+                    {% if story.headline %}
+                    <span style="font-size:11px; color:var(--text-faint); font-style:italic;">AI headline</span>
+                    {% endif %}
                 </div>
 
                 {% if story.summary and story.summary != story.title %}
@@ -593,6 +605,7 @@
                 </ul>
 
             </div>
+            {% endif %}
             {% endfor %}
         {% else %}
             <p class="empty">No articles found. Use the fetch bar above or wait for the next scheduled fetch.</p>

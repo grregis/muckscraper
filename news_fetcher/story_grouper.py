@@ -3,6 +3,9 @@
 import requests
 import os
 import numpy as np
+import logging
+
+logger = logging.getLogger(__name__)
 
 OLLAMA_HOST     = os.environ.get("OLLAMA_HOST", "")
 EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "nomic-embed-text")
@@ -35,7 +38,7 @@ def get_embedding(text):
             return embedding
         return None
     except Exception as e:
-        print(f"  [Embeddings] Error generating embedding: {e}")
+        logger.info(f"  [Embeddings] Error generating embedding: {e}")
         return None
 
 
@@ -81,10 +84,10 @@ def find_matching_story(article_title, article_embedding, recent_stories):
             best_story = story
 
     if best_score >= SIMILARITY_THRESHOLD and best_story:
-        print(f"  [Grouper] Matched to '{best_story.title}' (similarity: {best_score:.3f})")
+        logger.info(f"  [Grouper] Matched to '{best_story.title}' (similarity: {best_score:.3f})")
         return best_story
 
-    print(f"  [Grouper] No match found (best score: {best_score:.3f}), creating new story")
+    logger.info(f"  [Grouper] No match found (best score: {best_score:.3f}), creating new story")
     return None
 
 
@@ -103,7 +106,7 @@ def find_or_create_story(article_title, db, Story, recent_stories, article_embed
     story = Story(title=new_title, summary=None)
     db.session.add(story)
     db.session.flush()
-    print(f"  [Grouper] Created new story: '{new_title}'")
+    logger.info(f"  [Grouper] Created new story: '{new_title}'")
     return story
 
 
@@ -190,7 +193,7 @@ Rules:
                 match_index = int(token)
                 if 1 <= match_index <= len(candidate_stories):
                     matched = candidate_stories[match_index - 1]
-                    print(f"  [Grouper] Matched to story: '{matched.title}'")
+                    logger.info(f"  [Grouper] Matched to story: '{matched.title}'")
                     return matched
                 elif match_index == 0:
                     return None
@@ -198,5 +201,5 @@ Rules:
         return None
 
     except Exception as e:
-        print(f"  [Grouper] Ollama error: {e}")
+        logger.info(f"  [Grouper] Ollama error: {e}")
         return None

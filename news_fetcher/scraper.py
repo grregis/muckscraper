@@ -5,6 +5,8 @@ from bs4 import BeautifulSoup
 import bleach
 import time
 import os
+import logging
+logger = logging.getLogger(__name__)
 
 HEADERS_DEFAULT = {
     "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
@@ -96,10 +98,10 @@ def extract_with_readability(html, url):
         if content and len(content) > 200:
             sanitized = sanitize_html(content)
             if len(sanitized) > 200:
-                print(f"  [Readability] Extracted {len(sanitized)} chars from {url[:60]}")
+                logger.info(f"  [Readability] Extracted {len(sanitized)} chars from {url[:60]}")
                 return sanitized
     except Exception as e:
-        print(f"  [Readability] Error: {e}")
+        logger.info(f"  [Readability] Error: {e}")
     return None
 
 
@@ -162,14 +164,14 @@ def extract_article_html_bs4(url, headers=None):
 
         if content_html and len(content_html) > 200:
             sanitized = sanitize_html(content_html)
-            print(f"  [BS4] Scraped {len(sanitized)} chars from {url[:60]}")
+            logger.info(f"  [BS4] Scraped {len(sanitized)} chars from {url[:60]}")
             return sanitized
 
-        print(f"  [BS4] Could not extract sufficient content from {url[:60]}")
+        logger.info(f"  [BS4] Could not extract sufficient content from {url[:60]}")
         return None
 
     except Exception as e:
-        print(f"  [BS4] Error scraping {url[:60]}: {e}")
+        logger.info(f"  [BS4] Error scraping {url[:60]}: {e}")
         return None
 
 
@@ -226,17 +228,17 @@ def extract_article_html_playwright(url):
 
             if content_html and len(content_html) > 200:
                 sanitized = sanitize_html(content_html)
-                print(f"  [Playwright] Scraped {len(sanitized)} chars from {url[:60]}")
+                logger.info(f"  [Playwright] Scraped {len(sanitized)} chars from {url[:60]}")
                 return sanitized
 
-            print(f"  [Playwright] Could not extract content from {url[:60]}")
+            logger.info(f"  [Playwright] Could not extract content from {url[:60]}")
             return None
 
     except ImportError:
-        print("  [Playwright] Not installed, skipping.")
+        logger.info("  [Playwright] Not installed, skipping.")
         return None
     except Exception as e:
-        print(f"  [Playwright] Error scraping {url[:60]}: {e}")
+        logger.info(f"  [Playwright] Error scraping {url[:60]}: {e}")
         return None
 
 
@@ -246,16 +248,16 @@ def try_archive_fallback(url):
     Returns sanitized HTML or None.
     """
     archive_url = f"https://archive.ph/{url}"
-    print(f"  [Archive] Trying archive.ph for {url[:60]}")
+    logger.info(f"  [Archive] Trying archive.ph for {url[:60]}")
     try:
         response = requests.get(archive_url, headers=HEADERS_DEFAULT, timeout=15)
         if response.status_code == 200:
             content = extract_with_readability(response.text, archive_url)
             if content:
-                print(f"  [Archive] Successfully extracted from archive.ph")
+                logger.info(f"  [Archive] Successfully extracted from archive.ph")
                 return content
     except Exception as e:
-        print(f"  [Archive] Error: {e}")
+        logger.info(f"  [Archive] Error: {e}")
     return None
 
 
@@ -269,12 +271,12 @@ def scrape_article(url):
     Returns sanitized HTML or None.
     """
     if should_skip(url):
-        print(f"  [Scraper] Skipping {url[:60]}")
+        logger.info(f"  [Scraper] Skipping {url[:60]}")
         return None
 
     # Playwright-first domains
     if needs_playwright(url):
-        print(f"  [Scraper] Using Playwright for {url[:60]}")
+        logger.info(f"  [Scraper] Using Playwright for {url[:60]}")
         content = extract_article_html_playwright(url)
         if not content:
             content = try_archive_fallback(url)
@@ -282,7 +284,7 @@ def scrape_article(url):
 
     # Googlebot user agent domains
     if use_googlebot(url):
-        print(f"  [Scraper] Using Googlebot UA for {url[:60]}")
+        logger.info(f"  [Scraper] Using Googlebot UA for {url[:60]}")
         content = extract_article_html_bs4(url, headers=HEADERS_GOOGLEBOT)
         if not content:
             content = extract_article_html_bs4(url, headers=HEADERS_DEFAULT)
@@ -293,7 +295,7 @@ def scrape_article(url):
     # Default: BS4 with readability → Playwright → archive.ph
     content = extract_article_html_bs4(url)
     if not content:
-        print(f"  [Scraper] BS4 failed, trying Playwright for {url[:60]}")
+        logger.info(f"  [Scraper] BS4 failed, trying Playwright for {url[:60]}")
         content = extract_article_html_playwright(url)
     if not content:
         content = try_archive_fallback(url)

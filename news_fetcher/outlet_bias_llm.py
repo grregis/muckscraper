@@ -3,6 +3,9 @@
 import requests
 import json
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "")
 MODEL = "mannix/llama3.1-8b-lexi:latest"
@@ -31,7 +34,7 @@ def _ask_ollama(prompt):
         response.raise_for_status()
         return response.json().get("response", "").strip()
     except Exception as e:
-        print(f"  Error calling Ollama: {e}")
+        logger.info(f"  Error calling Ollama: {e}")
         return None
 
 
@@ -40,7 +43,7 @@ def _parse_bias_score(raw, label):
     if raw is None:
         return None
     if raw.lower() == "unknown":
-        print(f"  Ollama could not determine bias for: {label}")
+        logger.info(f"  Ollama could not determine bias for: {label}")
         return None
     try:
         score = int(raw)
@@ -48,7 +51,7 @@ def _parse_bias_score(raw, label):
             return score
         return None
     except ValueError:
-        print(f"  Could not parse Ollama response for '{label}': {raw}")
+        logger.info(f"  Could not parse Ollama response for '{label}': {raw}")
         return None
 
 
@@ -73,7 +76,7 @@ Outlet: {outlet_name}
 Rating:"""
 
     raw = _ask_ollama(prompt)
-    print(f"  Ollama rated outlet '{outlet_name}': {raw}")
+    logger.info(f"  Ollama rated outlet '{outlet_name}': {raw}")
     return _parse_bias_score(raw, outlet_name)
 
 
@@ -108,5 +111,5 @@ Article:
 Rating:"""
 
     raw = _ask_ollama(prompt)
-    print(f"  Ollama rated article '{title[:60]}...': {raw}")
+    logger.info(f"  Ollama rated article '{title[:60]}...': {raw}")
     return _parse_bias_score(raw, title)

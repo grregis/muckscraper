@@ -1,6 +1,15 @@
-# Changelog
+## [0.2.1] - 2026-03-20
 
-All notable changes to MuckScraper are documented here.
+### Added
+- AI-generated wire service style headlines for multi-article stories
+- Single-article story filter toggle — hide/show stories with only one article
+- `headline_generator.py` — new module for story headline generation
+- Headlines generated automatically when second article added to a story
+- Headlines generated during Ollama catchup for existing multi-article stories
+
+### Changed
+- Replaced all `print()` statements with proper Python `logging` module across all news_fetcher files
+- Story display now shows AI headline when available, falls back to auto-generated title
 
 ---
 

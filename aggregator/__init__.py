@@ -59,6 +59,7 @@ def create_app():
 
         stories = pagination.items if pagination else []
         total_pages = pagination.pages if pagination else 0
+        show_single = request.args.get("show_single", "false") == "true"
 
         return render_template(
             "articles.html",
@@ -67,6 +68,7 @@ def create_app():
             active_label=active_label,
             page=page,
             total_pages=total_pages,
+            show_single=show_single,
         )
 
     @app.route("/fetch", methods=["POST"])

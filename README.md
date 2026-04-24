@@ -15,7 +15,7 @@
 ![Story Analysis](screenshots/story_reader.png)
 
 ### Articles Feed
-![Articles Feed](screenshots/ligt_mode.png)
+![Articles Feed](screenshots/light_mode.png)
 
 ### Article Reader
 ![Article Reader](screenshots/article_reader.png)

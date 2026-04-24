@@ -8,17 +8,14 @@
 
 ## Screenshots
 
-### Headlines Front Page
-![MuckScraper Headlines Light](screenshots/headlines_light.png)
-
 ### Dark Mode
-![MuckScraper Headlines Dark](screenshots/headlines_dark.png)
+![MuckScraper Headlines Dark](screenshots/dark_mode.png)
 
 ### Multi-Source Story Analysis
-![Story Analysis](screenshots/story_analysis.png)
+![Story Analysis](screenshots/story_reader.png)
 
 ### Articles Feed
-![Articles Feed](screenshots/feed_view.png)
+![Articles Feed](screenshots/ligt_mode.png)
 
 ### Article Reader
 ![Article Reader](screenshots/article_reader.png)

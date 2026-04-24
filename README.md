@@ -72,7 +72,6 @@ muckscraper/
 │   ├── filters.py                        # Jinja2 template filters
 │   ├── constants.py                      # Shared constants (TOPICS, AGGREGATORS)
 │   └── blueprints/
-│       ├── personal.py                   # Public read-only routes (headlines, story, article)
 │       ├── admin.py                      # Authenticated write/trigger routes
 │       ├── auth.py                       # Login/logout routes
 │       └── __init__.py
